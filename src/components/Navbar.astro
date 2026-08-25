@@ -43,7 +43,7 @@ const { toggleSidebar, section, years } = Astro.props;
       </button>
     )
   }
-  <a href='/' class='site-title'>
+    <a href='/' class='site-title' aria-current={Astro.url.pathname === '/' ? 'page' : undefined}>
     {siteConfig.navbar.siteTitle}
   </a>
   <div class='flex-grow'></div>

@@ -22,6 +22,11 @@ export const rehypeHeadingIds: Plugin<[], Root> = () => (tree) => {
   });
 };
 
+/** Gatsby's permalink aria-label: slugified text with hyphens as spaces. */
+export function headingAriaLabel(node: Element): string {
+  return `${new GithubSlugger().slug(collectText(node)).replace(/-/g, ' ')} permalink`;
+}
+
 export function collectText(node: Element): string {
   let text = '';
   for (const child of node.children ?? []) {

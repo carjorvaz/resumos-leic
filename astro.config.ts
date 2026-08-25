@@ -17,7 +17,7 @@ import { remarkEmbedSnippet } from './src/remark/embed-snippet';
 import { remarkImageData } from './src/remark/image-data';
 import { katexMacros } from './src/remark/katex-macros';
 import { remarkMermaid } from './src/remark/mermaid';
-import { collectText, rehypeHeadingIds } from './src/remark/rehype-heading-ids';
+import { headingAriaLabel, rehypeHeadingIds } from './src/remark/rehype-heading-ids';
 import './src/remark/prism-mips-asm';
 import { remarkToc } from './src/remark/toc';
 
@@ -105,7 +105,7 @@ export default defineConfig({
             },
             properties: (element: Parameters<typeof collectText>[0]) => ({
               className: ['anchor', 'before'],
-              ariaLabel: `${collectText(element).toLowerCase()} permalink`,
+              ariaLabel: headingAriaLabel(element as Parameters<typeof headingAriaLabel>[0]),
             }),
           },
         ],
