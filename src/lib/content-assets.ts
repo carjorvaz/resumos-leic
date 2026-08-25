@@ -30,8 +30,11 @@ export function contentAssets(): Plugin {
       server.middlewares.use('/content/', async (req, res, next) => {
         try {
           const url = decodeURIComponent((req.url ?? '').split('?')[0]);
-          const filePath = path.join(contentRoot, url);
-          if (!filePath.startsWith(contentRoot)) return next();
+          if (url.split('/').includes('..')) return next();
+          const filePath = path.resolve(contentRoot, url);
+          if (filePath !== contentRoot && !filePath.startsWith(contentRoot + path.sep)) {
+            return next();
+          }
 
           const data = await fs.readFile(filePath);
           res.setHeader(
@@ -62,6 +65,8 @@ async function copyDir(from: string, to: string, filter: (file: string) => boole
     const dest = path.join(to, entry.name);
     if (entry.isDirectory()) {
       await copyDir(src, dest, filter);
+    } else if (entry.isSymbolicLink()) {
+      throw new Error(`Symlinks are not allowed in content/: ${src}`);
     } else if (filter(entry.name)) {
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.copyFile(src, dest);

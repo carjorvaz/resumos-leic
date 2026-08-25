@@ -5,6 +5,7 @@ import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeExternalLinks from 'rehype-external-links';
 import rehypeKatex from 'rehype-katex';
 import rehypePrismPlus from 'rehype-prism-plus';
+import type { TrustContext } from 'katex';
 import remarkDirective from 'remark-directive';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -69,7 +70,18 @@ export default defineConfig({
       ],
       rehypePlugins: [
         [rehypePrismPlus, { ignoreMissing: true }],
-        [rehypeKatex, { strict: 'ignore', macros: katexMacros, throwOnError: false }],
+        [
+          rehypeKatex,
+          {
+            strict: 'ignore',
+            macros: katexMacros,
+            throwOnError: false,
+            // Allow the \htmlClass macro (used by \smartcolor) — ported from
+            // the Gatsby configuration.
+            trust: (context: TrustContext) =>
+              context.command === '\\htmlClass' && /md-color--[a-zA-Z]+/.test(context.class),
+          },
+        ],
         [rehypeAutolinkHeadings, { behavior: 'prepend', className: ['anchor', 'before'] }],
         [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
       ],

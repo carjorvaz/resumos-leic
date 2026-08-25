@@ -17,9 +17,18 @@ export async function getHomepage(): Promise<PageEntry | undefined> {
   return getPageByPath('/');
 }
 
+/** Pages whose path lives under the given subject (e.g. `asa` for `/asa/x`). */
+export function getSubjectPages(pages: PageEntry[], subject: string): PageEntry[] {
+  return pages.filter(
+    (page) => page.data.path === `/${subject}` || page.data.path.startsWith(`/${subject}/`)
+  );
+}
+
 export interface SidebarLink {
   path: string;
   title: string;
+  /** Content-relative file path (e.g. `asa/0001-introducao.md`). */
+  id: string;
 }
 
 export interface SidebarSection extends SidebarLink {
@@ -28,8 +37,9 @@ export interface SidebarSection extends SidebarLink {
 }
 
 /**
- * Group all pages into the sidebar sections declared in `siteConfig`,
- * preserving the config order and sorting links by file path (as Gatsby did).
+ * Group pages into the sidebar sections declared in `siteConfig`, preserving
+ * the config order and sorting links by file path (the Gatsby original sorted
+ * the subject's markdown files by `relativePath`).
  */
 export function getSidebarSections(
   pages: PageEntry[],
@@ -43,12 +53,12 @@ export function getSidebarSections(
 
     const section = sections.find(({ key }) => key === type);
     if (section) {
-      section.links.push({ path, title: title || path });
+      section.links.push({ path, title: title || path, id: page.id });
     }
   }
 
   for (const section of sections) {
-    section.links.sort((a, b) => a.path.localeCompare(b.path));
+    section.links.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   return sections.filter(({ links }) => links.length > 0);
@@ -56,9 +66,8 @@ export function getSidebarSections(
 
 /** Title of the `topLevelPage` within the same subject (used by search). */
 export function getSectionTitle(pages: PageEntry[], subject: string): string | undefined {
-  return pages.find(
-    (page) => page.data.path.startsWith(`/${subject}/`) && page.data.type === 'topLevelPage'
-  )?.data.title;
+  return getSubjectPages(pages, subject).find((page) => page.data.type === 'topLevelPage')?.data
+    .title;
 }
 
 export async function getSectionTitleByPath(path: string): Promise<string | undefined> {

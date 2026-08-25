@@ -41,7 +41,7 @@ const BezoutCalculator = () => {
       quotients.push(Math.floor(a / b));
     }
     const coefX = [1, 0];
-    const coefY = [1, 0];
+    const coefY = [0, 1];
     for (let i = 2; i < quotients.length; ++i) {
       const q = quotients[i - 1] ?? 0;
       coefX[i] = coefX[i - 2] - q * coefX[i - 1];

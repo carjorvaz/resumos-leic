@@ -26,11 +26,6 @@ const pageDescription = description ?? siteConfig.description;
     <link rel='preconnect' href='https://fonts.googleapis.com' />
     <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin />
     <link rel='manifest' href='/manifest.webmanifest' />
-    <script is:inline>
-      {
-        noFlashScript;
-      }
-    </script>
     {
       import.meta.env.PROD && (
         <script
@@ -45,6 +40,7 @@ const pageDescription = description ?? siteConfig.description;
     }
   </head>
   <body>
+    <script is:inline set:html={noFlashScript} />
     <slot />
   </body>
 </html>
