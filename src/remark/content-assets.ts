@@ -48,7 +48,11 @@ export function remarkContentAssets() {
           url: original,
           // Gatsby's image links open the full-resolution file in a new tab.
           data: {
-            hProperties: { target: '_blank', rel: 'noopener' },
+            hProperties: {
+              className: ['gatsby-resp-image-link'],
+              target: '_blank',
+              rel: 'noopener',
+            },
           },
           children: [node],
         };
