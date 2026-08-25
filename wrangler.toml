@@ -1,0 +1,11 @@
+# Cloudflare Pages deployment configuration.
+#
+# Git-integrated Pages projects take the build command and Node version from
+# the dashboard; this file pins the output directory for wrangler-driven
+# deploys. Dashboard settings required for the migration:
+#   Build command:  npm run build
+#   Output dir:     dist
+#   Environment:    NODE_VERSION = 22   (Astro 7 requires >= 22.12)
+name = "resumos-leic"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-08-25"
