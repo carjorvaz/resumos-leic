@@ -235,6 +235,10 @@ blockquote > p:last-child {
   overflow-x: auto;
 }
 
+.katex-display {
+  overflow-x: auto;
+}
+
 figcaption {
   margin-top: 0.5em;
   text-align: center;

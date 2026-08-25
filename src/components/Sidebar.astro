@@ -24,7 +24,11 @@ const isActive = (path: string) => currentPath === path;
         <ul>
           {section.links.map(({ path, title }) => (
             <li>
-              <a href={path} class:list={{ link__active: isActive(path) }}>
+              <a
+                href={path}
+                class:list={{ link__active: isActive(path) }}
+                aria-current={isActive(path) ? 'page' : undefined}
+              >
                 {title || path}
               </a>
             </li>

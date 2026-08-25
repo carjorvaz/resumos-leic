@@ -1,7 +1,8 @@
 import { toString } from 'mdast-util-to-string';
 import { visit } from 'unist-util-visit';
-import type { Data, Node, Root } from 'mdast';
+import type { Data, Node, Parent, Root } from 'mdast';
 import type { Plugin } from 'unified';
+import type { VFile } from 'vfile';
 
 interface DirectiveData extends Data {
   hName?: string;
@@ -154,16 +155,50 @@ const onLeafDirectiveVisit = (node: LeafDirectiveNode): void => {
 };
 
 /**
+ * remark-directive v4 parses any `:name` sequence as a leaf directive, so
+ * prose like `10:54:23.674` (a clock time) is mis-read as a directive named
+ * `23.674`. The Gatsby-era remark-directive v1 did not. Unknown directives are
+ * reconstructed verbatim from their source positions instead of rendering as
+ * empty blocks.
+ */
+const repairUnknownDirectives = (tree: Root, file: VFile): void => {
+    const source = 'value' in file ? file.value : undefined;
+  if (typeof source !== 'string') return;
+
+    const repair = (
+    node: DirectiveNode,
+    index: number | undefined,
+    parent: Parent | undefined
+  ): void => {
+    if (options.customComponentsTags.includes(node.name) || node.name === options.youtubeTag) {
+      return;
+    }
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (index === undefined || !parent || start === undefined || end === undefined) return;
+    parent.children[index] = { type: 'text', value: source.slice(start, end) };
+  };
+
+  visit(tree, 'leafDirective', (node, index, parent) => {
+        if (parent) repair(node as DirectiveNode, index, parent);
+  });
+  visit(tree, 'textDirective', (node, index, parent) => {
+        if (parent) repair(node as DirectiveNode, index, parent);
+  });
+};
+
+/**
  * Port of `plugins/gatsby-remark-directive`: renders the custom container
  * directives (info/tip/warning/danger/details), `tab-group` containers and
  * `youtube` directives (container or leaf) through `data.hName` /
  * `data.hProperties`, so the CSS classes and iframe are produced at render time.
  */
-export const remarkDirectiveCustom: Plugin<[], Root, Root> = () => (tree) => {
+export const remarkDirectiveCustom: Plugin<[], Root, Root> = () => (tree, file) => {
   visit(tree, 'containerDirective', (node) => {
     onContainerDirectiveVisit(node as ContainerDirectiveNode);
   });
   visit(tree, 'leafDirective', (node) => {
     onLeafDirectiveVisit(node as LeafDirectiveNode);
   });
+  repairUnknownDirectives(tree, file);
 };

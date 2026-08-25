@@ -5,26 +5,54 @@ import type { VFile } from 'vfile';
 
 const contentRoot = path.resolve(process.cwd(), 'content');
 
+const rasterExtensions: Record<string, true> = {
+  '.png': true,
+  '.jpg': true,
+  '.jpeg': true,
+  '.gif': true,
+  '.webp': true,
+};
+
 /**
- * Rewrites relative SVG image URLs to absolute `/content/...` URLs so they
- * bypass Astro's image pipeline (which cannot probe the draw.io SVGs used in
- * the content) and are served as static files by the `contentAssets` Vite
- * plugin. Raster images keep going through Astro's optimized pipeline.
+ * Rewrites relative image URLs to absolute `/content/...` URLs: SVGs bypass
+ * Astro's image pipeline (which cannot probe the draw.io SVGs used in the
+ * content) and are served as static files by the `contentAssets` Vite plugin;
+ * raster images keep their relative URL so they go through Astro's optimized
+ * pipeline, and are wrapped in a link to the original file — matching the
+ * Gatsby output where clicking a diagram opens the full-resolution image.
  */
 export function remarkContentAssets() {
   return (tree: Root, file: VFile) => {
-    const filePath = (file as { path?: string }).path;
+    const filePath = 'path' in file && typeof file.path === 'string' ? file.path : undefined;
     if (!filePath) return;
 
     const relative = path.relative(contentRoot, filePath);
     const directory = path.posix.dirname(relative);
 
-    visit(tree, 'image', (node) => {
+    visit(tree, 'image', (node, index, parent) => {
       const url = node.url;
       if (url.startsWith('/') || URL.canParse(url)) return;
-      if (!/\.svg$/i.test(url.split('#')[0] ?? url)) return;
+      const cleanUrl = url.split('#')[0] ?? url;
+      const isSvg = /\.svg$/i.test(cleanUrl);
 
-      node.url = `/content/${path.posix.join(directory, url)}`;
+      if (isSvg) {
+        node.url = `/content/${path.posix.join(directory, url)}`;
+        return;
+      }
+
+      if (index === undefined || !parent) return;
+            if (rasterExtensions[path.extname(cleanUrl).toLowerCase()]) {
+        const original = `/content/${path.posix.join(directory, cleanUrl)}`;
+        parent.children[index] = {
+          type: 'link',
+          url: original,
+          // Gatsby's image links open the full-resolution file in a new tab.
+          data: {
+            hProperties: { target: '_blank', rel: 'noopener' },
+          },
+          children: [node],
+        };
+      }
     });
   };
 }

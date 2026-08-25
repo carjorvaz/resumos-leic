@@ -34,7 +34,7 @@ const homepage = await getHomepage();
 const subject = entry.data.path.split('/')[1];
 const sections = getSidebarSections(getSubjectPages(pages, subject), siteConfig.sidebarSections);
 const sectionTitle = getSectionTitle(pages, subject);
-const githubLink = `${siteConfig.footer.githubLink}/edit/master/content/${entry.id}`;
+const githubLink = `${siteConfig.footer.githubLink}/edit/master/content/${entry.id}.md`;
 const componentNames = entry.data.components ?? [];
 ---
 
