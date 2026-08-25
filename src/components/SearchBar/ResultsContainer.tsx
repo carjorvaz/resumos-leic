@@ -6,6 +6,7 @@ import StartSearching from './StartSearching';
 
 interface ResultsContainerProps {
   state: AutocompleteState<SearchHit>;
+  hasSearchError: boolean;
   getListProps: AutocompleteApi<SearchHit>['getListProps'];
   getItemProps: AutocompleteApi<SearchHit>['getItemProps'];
   onItemClick: (item: SearchHit) => void;
@@ -14,6 +15,7 @@ interface ResultsContainerProps {
 
 const ResultsContainer = ({
   state,
+  hasSearchError,
   getListProps,
   getItemProps,
   onItemClick,
@@ -23,6 +25,10 @@ const ResultsContainer = ({
 
   if (!state.query) {
     return <StartSearching years={years} />;
+  }
+
+  if (hasSearchError) {
+    return <div role='alert'>Search is currently unavailable. Please try again later.</div>;
   }
 
   if (!hasCollections) {

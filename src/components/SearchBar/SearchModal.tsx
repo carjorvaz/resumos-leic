@@ -41,9 +41,19 @@ const SearchModal = ({
   const formElementRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const resultsContainerRef = React.useRef<HTMLDivElement>(null);
+  const requestGenerationRef = React.useRef(0);
+  const beginRequest = React.useCallback(() => {
+    requestGenerationRef.current += 1;
+    return requestGenerationRef.current;
+  }, []);
+  const isCurrentRequest = React.useCallback(
+    (requestGeneration: number) => requestGeneration === requestGenerationRef.current,
+    []
+  );
 
   // Store autocomplete's internal state on this component
   const [state, setState] = React.useState<AutocompleteState<SearchHit>>(initialState);
+  const [hasSearchError, setHasSearchError] = React.useState(false);
 
   React.useEffect(() => {
     if (inputRef.current) {
@@ -66,11 +76,15 @@ const SearchModal = ({
         searchClient,
         indexName,
         onClose,
+        onError: () => setHasSearchError(true),
+        onSuccess: () => setHasSearchError(false),
+        begin: beginRequest,
+        isCurrent: isCurrentRequest,
         section: filterBySection ? section : undefined,
       }),
       initialState: { ...initialState, query: state.query },
     });
-  }, [searchClient, filterBySection, section, onClose]);
+  }, [searchClient, filterBySection, section, onClose, beginRequest, isCurrentRequest]);
 
   const onItemClick = React.useCallback(
     (item: SearchHit) => {
@@ -79,23 +93,37 @@ const SearchModal = ({
     [onClose]
   );
 
-  const { getEnvironmentProps, getInputProps, getListProps, getItemProps } = autocomplete;
+  const {
+    getEnvironmentProps,
+    getFormProps,
+    getLabelProps,
+    getInputProps,
+    getListProps,
+    getItemProps,
+  } = autocomplete;
 
   useTouchEvents({
     getEnvironmentProps,
-    panelElement: resultsContainerRef.current,
-    formElement: formElementRef.current,
-    inputElement: inputRef.current,
+    panelElementRef: resultsContainerRef,
+    formElementRef,
+    inputRef,
   });
 
   return (
     <>
       <header className='search-header' ref={formElementRef}>
-        <SearchForm inputRef={inputRef} getInputProps={getInputProps} onClose={onClose} />
+        <SearchForm
+          inputRef={inputRef}
+          getFormProps={getFormProps}
+          getLabelProps={getLabelProps}
+          getInputProps={getInputProps}
+          onClose={onClose}
+        />
       </header>
       <div ref={resultsContainerRef} className='search-results'>
         <ResultsContainer
           state={state}
+          hasSearchError={hasSearchError}
           getListProps={getListProps}
           getItemProps={getItemProps}
           onItemClick={onItemClick}

@@ -3,14 +3,7 @@ import { siteConfig } from '../config';
 import SearchBar from './SearchBar/SearchBar';
 import ThemeSettings from './ThemeSettings/ThemeSettings';
 import ExternalLink from './ExternalLink.astro';
-
-interface HomepageYear {
-  name: string;
-  semesters: Array<{
-    name: string;
-    courses: Array<{ name: string; link: string }>;
-  }>;
-}
+import type { HomepageYear } from './SearchBar/autocomplete';
 
 interface Props {
   /** Render the sidebar toggle button (content pages only). */
@@ -22,12 +15,24 @@ interface Props {
 }
 
 const { toggleSidebar, section, years } = Astro.props;
+const searchYears = years?.map(({ name, semesters }) => ({
+  name,
+  semesters: semesters.map(({ name, courses }) => ({
+    name,
+    courses: courses.map(({ name, link }) => ({ name, link })),
+  })),
+}));
 ---
 
 <header class='navbar'>
   {
     toggleSidebar && (
-      <button class='sidebar-button' aria-label='toggle sidebar'>
+      <button
+        class='sidebar-button'
+        aria-label='Abrir navegação da cadeira'
+        aria-controls='course-sidebar'
+        aria-expanded='false'
+      >
         <svg
           xmlns='http://www.w3.org/2000/svg'
           aria-hidden='true'
@@ -47,7 +52,7 @@ const { toggleSidebar, section, years } = Astro.props;
     {siteConfig.navbar.siteTitle}
   </a>
   <div class='flex-grow'></div>
-  <SearchBar client:idle section={section} years={years} />
+  <SearchBar client:idle section={section} years={searchYears} />
   <ThemeSettings client:idle />
   <div class='navbar-links'>
     {

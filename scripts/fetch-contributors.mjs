@@ -1,5 +1,13 @@
 import { graphql } from '@octokit/graphql';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +30,21 @@ const contributorsPath = join(repoRoot, 'src/data/contributors.json');
 
 function writeJsonFile(filePath, value) {
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  // Write atomically (temp file + rename) so an interrupted run never leaves
+  // a truncated file that would trip the guarded fallback reads below.
+  const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`);
+    renameSync(tmpPath, filePath);
+  } finally {
+    try {
+      unlinkSync(tmpPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
 }
 
 function readCache() {
@@ -31,6 +53,39 @@ function readCache() {
   }
   try {
     return JSON.parse(readFileSync(cachePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function isContributor(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  if (typeof value.username !== 'string' || value.username.length === 0) {
+    return false;
+  }
+
+  if (value.name !== undefined && typeof value.name !== 'string') {
+    return false;
+  }
+
+  return ['labels', 'additionalLabels', 'boldLabels'].every(
+    (field) =>
+      value[field] === undefined ||
+      (Array.isArray(value[field]) && value[field].every((label) => typeof label === 'string'))
+  );
+}
+
+function readContributors() {
+  if (!existsSync(contributorsPath)) {
+    return null;
+  }
+
+  try {
+    const contributors = JSON.parse(readFileSync(contributorsPath, 'utf8'));
+    return Array.isArray(contributors) && contributors.every(isContributor) ? contributors : null;
   } catch {
     return null;
   }
@@ -80,7 +135,14 @@ const githubToken = process.env.GITHUB_TOKEN;
 if (!githubToken) {
   console.info('No GitHub token found (GITHUB_TOKEN env var), skipping contributors list');
 
-  writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
+  // Never overwrite a valid existing contributors file without a token: it may
+  // hold real data fetched in a previous run. Bootstrap defaults when the file
+  // is missing, unreadable, or malformed.
+  if (readContributors() === null) {
+    writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
+  } else {
+    console.info(`Keeping existing ${contributorsPath}`);
+  }
 } else {
   const graphqlGh = graphql.defaults({
     headers: {
@@ -93,8 +155,14 @@ if (!githubToken) {
   const repoName = githubRepository;
 
   const cache = readCache();
-  const lastUpdated = cache?.lastUpdated ?? null;
-  mergeContributorsFromCache(contributors, cache?.contributors ?? []);
+  const lastUpdated =
+    Array.isArray(cache?.contributors) && cache.contributors.every(isContributor)
+      ? (cache.lastUpdated ?? null)
+      : null;
+  const cachedContributors = Array.isArray(cache?.contributors)
+    ? cache.contributors.filter(isContributor)
+    : [];
+  mergeContributorsFromCache(contributors, cachedContributors);
   const newLastUpdated = Date.now();
 
   const getPullRequests = async (cursor) => {
@@ -103,7 +171,7 @@ if (!githubToken) {
       query fetchPullRequests($cursor: String, $owner: String!, $repository: String!) {
         repository(owner: $owner, name: $repository) {
           pullRequests(
-            first: 25
+            first: 100
             after: $cursor
             states: [MERGED]
             orderBy: {field: UPDATED_AT, direction: DESC}
@@ -140,13 +208,23 @@ if (!githubToken) {
   };
 
   let lastResponse = null;
-  do {
-    lastResponse = await getPullRequests(lastResponse?.pageInfo?.endCursor ?? null);
-    mergeContributors(contributors, lastResponse.nodes);
-  } while (
-    lastResponse.pageInfo?.hasNextPage &&
-    (!lastUpdated || lastUpdated <= new Date(lastResponse.nodes.at(-1)?.updatedAt))
-  );
+  try {
+    do {
+      lastResponse = await getPullRequests(lastResponse?.pageInfo?.endCursor ?? null);
+      mergeContributors(contributors, lastResponse.nodes);
+    } while (
+      lastResponse.pageInfo?.hasNextPage &&
+      (!lastUpdated || lastUpdated <= new Date(lastResponse.nodes.at(-1)?.updatedAt))
+    );
+  } catch (error) {
+    // A GitHub API failure must not block dev or build: keep the previously
+    // fetched data (or bootstrap the defaults) and continue.
+    console.warn('Failed to fetch contributors from GitHub, using existing data:', error.message);
+    if (readContributors() === null) {
+      writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
+    }
+    process.exit(0);
+  }
 
   const contributorsData = toContributorData(contributors);
   writeJsonFile(cachePath, { lastUpdated: newLastUpdated, contributors: contributorsData });

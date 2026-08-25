@@ -53,26 +53,65 @@ const normalizePath = (filePath: string): string => {
   return prefix + segments.join('/');
 };
 
-// Port of `parse-numeric-range`: parses "1", "1-5", "1..5", "1...5" and comma
-// separated combinations into an array of line numbers.
-const parseNumericRange = (input: string): number[] => {
-  const result: number[] = [];
+interface NumericRange {
+  lower: number;
+  upper: number;
+}
+
+const RANGE_PATTERN = /^(\d+)(-|\.\.\.?|\u2025|\u2026|\u22EF)(\d+)$/;
+
+const parsePositiveInteger = (value: string): number | undefined => {
+  const result = Number(value);
+  return Number.isSafeInteger(result) && result >= 1 ? result : undefined;
+};
+
+// Parse ranges without expanding every selected line.
+const parseNumericRange = (input: string, lineCount: number): NumericRange[] | undefined => {
+  if (!input.trim()) return undefined;
+
+  const ranges: NumericRange[] = [];
   for (const part of input.split(',').map((str) => str.trim())) {
-    if (/^-?\d+$/.test(part)) {
-      result.push(parseInt(part, 10));
+    if (!part) return undefined;
+
+    if (/^\d+$/.test(part)) {
+      const line = parsePositiveInteger(part);
+      if (line === undefined) return undefined;
+      if (line <= lineCount) ranges.push({ lower: line, upper: line });
       continue;
     }
-    const match = /^(-?\d+)(-|\.\.\.?|\u2025|\u2026|\u22EF)(-?\d+)$/.exec(part);
-    if (!match) continue;
-    const lhs = parseInt(match[1], 10);
-    const rhs = parseInt(match[3], 10);
-    const increment = lhs < rhs ? 1 : -1;
-    let end = rhs;
-    // Make it inclusive by moving the right 'stop-point' away by one.
-    if (match[2] === '-' || match[2] === '..' || match[2] === '\u2025') end += increment;
-    for (let i = lhs; i !== end; i += increment) result.push(i);
+
+    const match = RANGE_PATTERN.exec(part);
+    if (!match) return undefined;
+
+    const lhs = parsePositiveInteger(match[1]);
+    const rhs = parsePositiveInteger(match[3]);
+    if (lhs === undefined || rhs === undefined) return undefined;
+
+    // `-` and `..` include the endpoint; ellipsis operators exclude it.
+    const inclusiveEndpoint = match[2] === '-' || match[2] === '..' || match[2] === '\u2025';
+    if (Math.min(lhs, rhs) > lineCount) continue;
+    if (!inclusiveEndpoint && lhs === rhs) continue;
+
+    const clampedLhs = Math.min(lhs, lineCount);
+    const clampedRhs = Math.min(rhs, lineCount);
+    const lower = Math.min(clampedLhs, clampedRhs) + (!inclusiveEndpoint && lhs > rhs ? 1 : 0);
+    const upper =
+      Math.max(clampedLhs, clampedRhs) -
+      (!inclusiveEndpoint && lhs < rhs && rhs <= lineCount ? 1 : 0);
+
+    if (lower <= upper) ranges.push({ lower, upper });
   }
-  return result;
+
+  return ranges;
+};
+
+const selectLines = (sourceLines: string[], ranges: NumericRange[]): string => {
+  return sourceLines
+    .filter((_, index) => {
+      const line = index + 1;
+      return ranges.some((range) => line >= range.lower && line <= range.upper);
+    })
+    .join('\n');
 };
 
 /**
@@ -89,86 +128,161 @@ export const remarkEmbedSnippet: Plugin<[options?: EmbedSnippetOptions], Root, R
   options = {}
 ) => {
   return (tree, file) => {
-    let directory = options.directory;
+    function fatal(reason: string, node?: Node): never {
+      throw file.fail(reason, node, 'remark-embed-snippet');
+    }
+
+    const directory = options.directory || file.dirname;
     if (!directory) {
-      directory = file.dirname;
+      fatal('Cannot resolve embedded snippets because the Markdown file has no directory.');
     }
-    if (!directory || !fs.existsSync(directory)) {
-      throw new Error(`Invalid directory specified "${directory}"`);
+
+    const contentRoot = (() => {
+      try {
+        return fs.realpathSync(path.resolve(directory));
+      } catch {
+        fatal(`Invalid embed directory "${directory}".`);
+      }
+    })();
+
+    const contentRootIsDirectory = (() => {
+      try {
+        return fs.statSync(contentRoot).isDirectory();
+      } catch {
+        // A successful realpath should normally make this unreachable; treat
+        // races and unusual filesystem errors as an invalid root.
+        return false;
+      }
+    })();
+    if (!contentRootIsDirectory) {
+      fatal(`Invalid embed directory "${directory}": not a directory.`);
     }
+
+    const isWithinContentRoot = (candidate: string): boolean => {
+      const relative = path.relative(contentRoot, candidate);
+      return (
+        relative === '' ||
+        (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`))
+      );
+    };
 
     visit(tree, 'inlineCode', (node) => {
       const value = node.value;
       if (!value.startsWith('embed:')) return;
 
-      const filePath = value.slice(6);
-      let snippetPath = normalizePath(path.join(directory, filePath));
+      const { requestedPath, lineRange, snippetName } = (() => {
+        const embeddedPath = value.slice(6);
+        const rangePrefixIndex = embeddedPath.indexOf('#L');
+        if (rangePrefixIndex > -1) {
+          return {
+            requestedPath: embeddedPath.slice(0, rangePrefixIndex),
+            lineRange: embeddedPath.slice(rangePrefixIndex + 2),
+            snippetName: '',
+          };
+        }
 
-      // Embed specific lines numbers of a file
-      let lines: number[] = [];
-      let snippetName = '';
-      const rangePrefixIndex = snippetPath.indexOf('#L');
-      if (rangePrefixIndex > -1) {
-        const range = snippetPath.slice(rangePrefixIndex + 2);
-        lines = range.length === 1 ? [Number.parseInt(range, 10)] : parseNumericRange(range);
-        // Remove everything after the range prefix from file path
-        snippetPath = snippetPath.slice(0, rangePrefixIndex);
-      } else {
         // Check for a `{snippet: "snippetName"}` suffix following the file path.
-        const optionIndex = snippetPath.indexOf('{');
-        if (optionIndex > -1) {
-          const optionStr = snippetPath.slice(optionIndex);
-          snippetPath = snippetPath.slice(0, optionIndex);
+        const optionIndex = embeddedPath.indexOf('{');
+        if (optionIndex === -1) {
+          return {
+            requestedPath: embeddedPath,
+            lineRange: undefined,
+            snippetName: '',
+          };
+        }
+
+        const optionStr = embeddedPath.slice(optionIndex);
+        const requestedPath = embeddedPath.slice(0, optionIndex);
+        const optionValue: unknown = (() => {
           try {
-            const optionValue = JSON.parse(optionStr.replace(/snippet\s*:/, '"snippet":')) as {
-              snippet?: unknown;
-            };
-            if (optionValue && typeof optionValue.snippet !== 'undefined') {
-              snippetName = optionValue.snippet as string;
-            } else {
-              throw new Error(`Invalid snippet options specified: ${optionStr}`);
-            }
+            return JSON.parse(optionStr.replace(/snippet\s*:/, '"snippet":'));
           } catch {
-            throw new Error(`Invalid snippet options specified: ${optionStr}`);
+            fatal(`Invalid snippet options specified: ${optionStr}`, node);
           }
+        })();
+        if (
+          typeof optionValue !== 'object' ||
+          optionValue === null ||
+          !('snippet' in optionValue) ||
+          typeof optionValue.snippet !== 'string'
+        ) {
+          fatal(`Invalid snippet options specified: ${optionStr}`, node);
         }
+
+        return {
+          requestedPath,
+          lineRange: undefined,
+          snippetName: optionValue.snippet,
+        };
+      })();
+
+      const normalizedPath = normalizePath(requestedPath);
+      const unresolvedSnippetPath = path.resolve(contentRoot, normalizedPath);
+      if (!isWithinContentRoot(unresolvedSnippetPath)) {
+        fatal(`Embedded snippet path escapes the content root: "${requestedPath}".`, node);
       }
 
-      if (!fs.existsSync(snippetPath)) {
-        throw new Error(`Invalid snippet specified; no such file "${snippetPath}"`);
+      const snippetPath = (() => {
+        try {
+          return fs.realpathSync(unresolvedSnippetPath);
+        } catch {
+          fatal(`Invalid snippet specified; no such file "${requestedPath}".`, node);
+        }
+      })();
+
+      if (!isWithinContentRoot(snippetPath)) {
+        fatal(`Embedded snippet path escapes the content root: "${requestedPath}".`, node);
       }
 
-      let code = fs.readFileSync(snippetPath, 'utf8').trim();
+      const sourceCode = (() => {
+        try {
+          return fs.readFileSync(snippetPath, 'utf8').trim();
+        } catch {
+          fatal(`Unable to read embedded snippet "${requestedPath}".`, node);
+        }
+      })();
 
-      if (lines.length) {
-        code = code
-          .split('\n')
-          .filter((_, lineNumber) => lines.includes(lineNumber + 1))
-          .join('\n');
-      } else if (snippetName.length) {
-        const startSnippetMatcher = new RegExp(
-          `start-snippet{${snippetName}}[^\r\n]*[\r\n](.*)`,
-          'gs'
-        );
-        const startSnippetMatch = startSnippetMatcher.exec(code);
-        if (startSnippetMatch && startSnippetMatch.length >= 2) {
-          code = startSnippetMatch[1];
-          const endSnippetMatcher = new RegExp(
-            `(.*)[\r\n][^\r\n]*end-snippet{${snippetName}}`,
-            'gs'
+      const code = (() => {
+        if (lineRange !== undefined) {
+          const sourceLines = sourceCode ? sourceCode.split('\n') : [];
+          const ranges = parseNumericRange(lineRange, sourceLines.length);
+          if (ranges === undefined) {
+            fatal(
+              `Invalid line range "${lineRange}" in embedded snippet "${requestedPath}".`,
+              node
+            );
+          }
+          return selectLines(sourceLines, ranges);
+        }
+
+        if (snippetName.length) {
+          // Locate the markers positionally instead of with a dot-star regex:
+          // the legacy pattern backtracks quadratically on files without an end
+          // marker, stalling the build. Escape the snippet name (it is user
+          // content interpolated from the markdown).
+          const escapedName = snippetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const startMarker = `start-snippet{${escapedName}}`;
+          const startSnippetMatcher = new RegExp(`${startMarker}[^\r\n]*[\r\n]`, 'gs');
+          const startSnippetMatch = startSnippetMatcher.exec(sourceCode);
+          if (!startSnippetMatch) return '';
+
+          const snippetCode = sourceCode.slice(
+            startSnippetMatch.index + startSnippetMatch[0].length
           );
-          const endSnippetMatch = endSnippetMatcher.exec(code);
-          if (endSnippetMatch && endSnippetMatch.length >= 2) {
-            code = endSnippetMatch[1];
-          }
-        } else {
-          code = '';
+          const endMarker = `end-snippet{${escapedName}}`;
+          const endIndex = snippetCode.indexOf(endMarker);
+          if (endIndex === -1) return snippetCode;
+
+          const lineStart = snippetCode.lastIndexOf('\n', endIndex) + 1;
+          return snippetCode.slice(0, lineStart);
         }
-      }
+
+        return sourceCode;
+      })();
 
       // PrismJS themes target `pre[class*="language-"]`, so the language must
       // be set on the code node for the theme styles to apply.
-      const language = getLanguage(snippetPath);
+      const language = getLanguage(normalizedPath);
 
       // Change the node type to code, insert our file as value and set language.
       const codeNode = node as Node & { type: string; value?: string; lang?: string | null };

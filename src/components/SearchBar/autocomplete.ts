@@ -31,14 +31,24 @@ export function createGetSources({
   searchClient,
   indexName,
   onClose,
+  onError,
+  onSuccess,
+  begin,
+  isCurrent,
   section,
 }: {
   searchClient: Meilisearch;
   indexName: string;
   onClose: () => void;
+  onError: () => void;
+  onSuccess: () => void;
+  begin: () => number;
+  isCurrent: (requestGeneration: number) => boolean;
   section?: string;
 }) {
-  return async ({ query, setContext, setStatus }: GetSourcesParams<SearchHit>) => {
+  return async ({ query, setContext }: GetSourcesParams<SearchHit>) => {
+    const requestGeneration = begin();
+
     if (!query) {
       // Return no results if query is empty
       return [];
@@ -66,7 +76,10 @@ export function createGetSources({
       // The search context is not consumed by any component, but is kept for
       // parity with the legacy implementation (the v0.60 API reports the total
       // number of hits as `estimatedTotalHits` instead of `nbHits`).
-      setContext({ nbHits: estimatedTotalHits });
+      if (isCurrent(requestGeneration)) {
+        setContext({ nbHits: estimatedTotalHits });
+        onSuccess();
+      }
 
       return Object.entries(groupedHits).map(([title, sectionHits]) => ({
         sourceId: `hit_${title}`,
@@ -82,11 +95,12 @@ export function createGetSources({
           return sectionHits;
         },
       }));
-    } catch (error) {
+    } catch {
       // Failed to fetch from meilisearch backend
-      setStatus('error');
-
-      throw error;
+      if (isCurrent(requestGeneration)) {
+        onError();
+      }
+      return [];
     }
   };
 }
