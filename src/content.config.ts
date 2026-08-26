@@ -8,7 +8,7 @@ import { glob } from 'astro/loaders';
  * whose path is `/`.
  */
 const pages = defineCollection({
-  loader: glob({ base: './content', pattern: '**/*.md' }),
+  loader: glob({ base: './content', pattern: '**/*.md', deferRender: true, retainBody: false }),
   schema: z.object({
     path: z.string(),
     title: z.string().optional(),

@@ -30,7 +30,7 @@ export function headingAriaLabel(node: Element): string {
 export function collectText(node: Element): string {
   let text = '';
   for (const child of node.children ?? []) {
-    if (child.type === 'text' || child.type === 'raw') {
+    if (child.type === 'text') {
       text += child.value ?? '';
     } else if ('children' in child) {
       text += collectText(child as Element);
