@@ -42,6 +42,12 @@ export function remarkContentAssets() {
 
       if (index === undefined || !parent) return;
       if (rasterExtensions[path.extname(cleanUrl).toLowerCase()]) {
+        const data = (node.data ??= {}) as { hProperties?: Record<string, unknown> };
+        data.hProperties = {
+          ...(data.hProperties ?? {}),
+          widths: [370, 800, 1200],
+          sizes: '(max-width: 740px) 100vw, 740px',
+        };
         const original = `/content/${path.posix.join(directory, cleanUrl)}`;
         parent.children[index] = {
           type: 'link',

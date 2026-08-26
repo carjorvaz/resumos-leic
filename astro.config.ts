@@ -54,6 +54,10 @@ export default defineConfig({
   site: 'https://resumos.leic.pt',
   // Gatsby builds every page with a trailing slash; match its URL scheme.
   trailingSlash: 'always',
+  image: {
+    layout: 'constrained',
+    responsiveStyles: true,
+  },
   integrations: [react()],
   vite,
   markdown: {
