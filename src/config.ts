@@ -1,8 +1,6 @@
 export const siteConfig = {
   title: 'Resumos LEIC-A',
-  shortTitle: 'Resumos LEIC-A',
   description: 'Resumos das UCs de LEIC-A do IST',
-  siteUrl: 'https://resumos.leic.pt',
   sidebarSections: [
     { key: 'topLevelPage' },
     { key: 'content', name: '📝 Conteúdo' },

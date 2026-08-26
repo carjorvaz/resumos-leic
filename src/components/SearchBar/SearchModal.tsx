@@ -70,13 +70,10 @@ const SearchModal = ({
       }),
       initialState: { ...initialState, query: state.query },
     });
-    // Including state.query to dependency array not needed; supress warning
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchClient, filterBySection, section, onClose]);
 
   const onItemClick = React.useCallback(
     (item: SearchHit) => {
-      // In the future, we might want to save recent searches
       onClose();
     },
     [onClose]

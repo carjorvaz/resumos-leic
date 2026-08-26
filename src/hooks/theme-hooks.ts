@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { fonts, readingDefaults, readingStorageKeys } from '../lib/reading-options';
-export { fonts, type FontOption } from '../lib/reading-options';
 
 import '../styles/themes/black.css';
 import '../styles/themes/gruvbox.css';

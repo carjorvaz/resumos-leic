@@ -110,7 +110,7 @@ const TCRTableCalculator = () => {
     for (let i = 2; i < quotients.length; ++i) {
       coefX[i] = coefX[i - 2] - (quotients[i - 1] ?? 0) * coefX[i - 1];
     }
-    if (remainder.slice(-2)[0] !== 1) return NaN; // probably won't happen
+    if (remainder.slice(-2)[0] !== 1) return NaN;
     // x = coefX[-1] + ct
     return coefX[coefX.length - 1] % c;
   };

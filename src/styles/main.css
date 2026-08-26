@@ -307,9 +307,7 @@ button {
   gap: 5px;
   color: var(--textColor);
   opacity: 60%;
-  transition:
-    color 1s cubic-bezier(0.075, 0.82, 0.165, 1),
-    opacity 1s cubic-bezier(0.075, 0.82, 0.165, 1);
+  transition: color 1s cubic-bezier(0.075, 0.82, 0.165, 1);
 }
 
 .edit-link:hover {

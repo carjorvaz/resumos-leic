@@ -71,7 +71,6 @@ export function createGetSources({
       return Object.entries(groupedHits).map(([title, sectionHits]) => ({
         sourceId: `hit_${title}`,
         onSelect({ item, event }: OnSelectParams<SearchHit>) {
-          // In the future save recent item here
           if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
             onClose();
           }
