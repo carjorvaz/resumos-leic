@@ -1,6 +1,7 @@
 ---
 import ExternalLink from './ExternalLink.astro';
 import { siteConfig } from '../config';
+import { withTrailingSlash } from '../lib/site-path';
 
 interface SidebarLink {
   path: string;
@@ -25,7 +26,7 @@ const isActive = (path: string) => currentPath === path;
           {section.links.map(({ path, title }) => (
             <li>
               <a
-                href={path}
+                href={withTrailingSlash(path)}
                 class:list={{ link__active: isActive(path) }}
                 aria-current={isActive(path) ? 'page' : undefined}
               >

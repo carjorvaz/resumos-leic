@@ -4,6 +4,7 @@ import type {
   OnSelectParams,
 } from '@algolia/autocomplete-core';
 import type { Meilisearch } from 'meilisearch';
+import { withTrailingSlash } from '../../lib/site-path';
 
 /**
  * A search hit as returned by the meilisearch index. The index signature
@@ -95,7 +96,7 @@ export function stripDomainFromLink(url?: string) {
   if (!url) return '/';
 
   const parsedUrl = new URL(url);
-  return parsedUrl.href.replace(parsedUrl.origin, '');
+  return withTrailingSlash(parsedUrl.href.replace(parsedUrl.origin, ''));
 }
 
 // Override Autocomplete's default navigation behaviour with a full page navigation

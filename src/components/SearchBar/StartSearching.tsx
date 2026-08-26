@@ -1,3 +1,4 @@
+import { withTrailingSlash } from '../../lib/site-path';
 import type { HomepageYear } from './autocomplete';
 
 const StartSearching = ({ years = [] }: { years?: HomepageYear[] }) => {
@@ -11,7 +12,7 @@ const StartSearching = ({ years = [] }: { years?: HomepageYear[] }) => {
               <div key={semester.name} className='search-start-group-column'>
                 {semester.courses.map((course) => (
                   <a
-                    href={course.link}
+                    href={withTrailingSlash(course.link)}
                     key={course.link}
                     className='search-start-group-column--item'
                   >
