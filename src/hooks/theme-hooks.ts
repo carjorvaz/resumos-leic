@@ -1,137 +1,113 @@
-import { createElement, useEffect, useMemo, useState } from 'react';
-import type { ReactElement } from 'react';
+import { useEffect, useState } from 'react';
+import { fonts, readingDefaults, readingStorageKeys } from '../lib/reading-options';
+export { fonts, type FontOption } from '../lib/reading-options';
+
 import '../styles/themes/black.css';
 import '../styles/themes/gruvbox.css';
 import '../styles/themes/nord.css';
 import '../styles/themes/solarized.css';
 
-export interface FontOption {
-  cssFamily: string;
-  url?: string;
-  displayName: string;
-}
-
 type LocalStorageSetter<T> = (value: T | ((prevValue: T | null) => T | null)) => void;
 
-export const fonts: Record<string, FontOption> = {
-  roboto: {
-    cssFamily: 'Roboto, sans-serif',
-    url: 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap',
-    displayName: 'Roboto (default)',
-  },
-  comicNeue: {
-    cssFamily: 'Comic Neue, sans-serif',
-    url: 'https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap',
-    displayName: 'Comic Neue',
-  },
-  indieFlower: {
-    cssFamily: 'Indie Flower, cursive',
-    url: 'https://fonts.googleapis.com/css2?family=Indie+Flower&display=swap',
-    displayName: 'Indie Flower',
-  },
-  nunito: {
-    cssFamily: 'Nunito, sans-serif',
-    url: 'https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap',
-    displayName: 'Nunito',
-  },
-  openDyslexic: {
-    cssFamily: 'OpenDyslexicRegular, Roboto, sans-serif',
-    url: 'https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/open-dyslexic-regular.min.css',
-    displayName: 'OpenDyslexic',
-  },
-  openSans: {
-    cssFamily: 'Open Sans, Roboto, sans-serif',
-    url: 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap',
-    displayName: 'Open Sans',
-  },
-  cursive: {
-    cssFamily: 'cursive',
-    displayName: 'cursive (system)',
-  },
-  monospace: {
-    cssFamily: 'monospace',
-    displayName: 'monospace (system)',
-  },
-  sansSerif: {
-    cssFamily: 'sans-serif',
-    displayName: 'sans-serif (system)',
-  },
-  serif: {
-    cssFamily: 'serif',
-    displayName: 'serif (system)',
-  },
-};
-
 export function useFontSettings(): {
-  fontLoader: ReactElement | null;
   font: string | null;
   setFont: LocalStorageSetter<string>;
 } {
-  const [font, setFont] = useLocalStorage<string>('customFont', 'roboto');
+  const [font, setFont] = useLocalStorage<string>(
+    readingStorageKeys.customFont,
+    readingDefaults.customFont
+  );
+  const normalizedFont =
+    typeof font === 'string' && Object.prototype.hasOwnProperty.call(fonts, font)
+      ? font
+      : readingDefaults.customFont;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const element = window.document.body;
-    const selectedFont = (font && fonts[font]) || fonts.roboto;
-    element.style.fontFamily = selectedFont.cssFamily;
-  }, [font]);
+    const selectedFont = fonts[normalizedFont];
+    window.document.body.style.fontFamily = selectedFont.cssFamily;
 
-  const fontLoader = useMemo(() => {
-    const selectedFont = (font && fonts[font]) || fonts.roboto;
-    if (!selectedFont.url) return null;
+    let stylesheet = window.document.getElementById(
+      'selected-font-stylesheet'
+    ) as HTMLLinkElement | null;
+    if (!stylesheet) {
+      stylesheet = window.document.createElement('link');
+      stylesheet.id = 'selected-font-stylesheet';
+      stylesheet.rel = 'stylesheet';
+      window.document.head.appendChild(stylesheet);
+    }
 
-    return createElement('link', { href: selectedFont.url, rel: 'stylesheet' });
-  }, [font]);
+    if (selectedFont.url) {
+      stylesheet.href = selectedFont.url;
+    } else {
+      stylesheet.removeAttribute('href');
+    }
+  }, [normalizedFont]);
 
-  return { fontLoader, font, setFont };
+  return { font: normalizedFont, setFont };
 }
 
 export function useContentWidth(): {
   contentWidth: string | null;
   setContentWidth: LocalStorageSetter<string>;
 } {
-  const [contentWidth, setContentWidth] = useLocalStorage<string>('contentWidth', 'compact');
+  const [contentWidth, setContentWidth] = useLocalStorage<string>(
+    readingStorageKeys.contentWidth,
+    readingDefaults.contentWidth
+  );
+  const normalizedContentWidth = contentWidth === 'full' ? 'full' : readingDefaults.contentWidth;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const element = window.document.body;
-    if (contentWidth === 'full') {
+    if (normalizedContentWidth === 'full') {
       element.classList.add('full-width');
     } else {
       element.classList.remove('full-width');
     }
-  });
+  }, [normalizedContentWidth]);
 
-  return { contentWidth, setContentWidth };
+  return { contentWidth: normalizedContentWidth, setContentWidth };
 }
 
 export function useTextAlign(): {
   textAlign: string | null;
   setTextAlign: LocalStorageSetter<string>;
 } {
-  const [textAlign, setTextAlign] = useLocalStorage<string>('textAlign', 'left');
+  const [textAlign, setTextAlign] = useLocalStorage<string>(
+    readingStorageKeys.textAlign,
+    readingDefaults.textAlign
+  );
+  const normalizedTextAlign = textAlign === 'justify' ? 'justify' : readingDefaults.textAlign;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const element = window.document.body;
-    if (textAlign === 'justify') {
+    if (normalizedTextAlign === 'justify') {
       element.classList.add('text-justify');
     } else {
       element.classList.remove('text-justify');
     }
-  });
+  }, [normalizedTextAlign]);
 
-  return { textAlign, setTextAlign };
+  return { textAlign: normalizedTextAlign, setTextAlign };
 }
 
 export function useThemeSettings(): {
   theme: string | null;
   setTheme: LocalStorageSetter<string>;
 } {
-  const [theme, setTheme] = useLocalStorage<string>('themeName', 'default');
+  const [theme, setTheme] = useLocalStorage<string>(
+    readingStorageKeys.themeName,
+    readingDefaults.themeName
+  );
+  const normalizedTheme =
+    typeof theme === 'string' && theme.length > 0 && /^[A-Za-z0-9_-]+$/.test(theme)
+      ? theme
+      : readingDefaults.themeName;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -140,20 +116,25 @@ export function useThemeSettings(): {
     [...element.classList]
       .filter((c) => c.startsWith('theme-'))
       .forEach((c) => element.classList.remove(c));
-    element.classList.add(`theme-${theme || 'default'}`);
-  });
+    element.classList.add(`theme-${normalizedTheme}`);
+  }, [normalizedTheme]);
 
-  return { theme, setTheme };
+  return { theme: normalizedTheme, setTheme };
 }
 
 export function useDarkMode(): {
   darkMode: boolean | null;
   setDarkModeStored: LocalStorageSetter<boolean | null>;
 } {
-  const [darkModeStored, setDarkModeStored] = useLocalStorage<boolean | null>('darkMode', null);
+  const [darkModeStored, setDarkModeStored] = useLocalStorage<boolean | null>(
+    readingStorageKeys.darkMode,
+    readingDefaults.darkMode
+  );
   const prefersDarkMode = usePrefersDarkMode();
 
-  const darkMode = darkModeStored ?? prefersDarkMode;
+  const normalizedDarkModeStored =
+    typeof darkModeStored === 'boolean' ? darkModeStored : readingDefaults.darkMode;
+  const darkMode = normalizedDarkModeStored ?? prefersDarkMode;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -168,7 +149,7 @@ export function useDarkMode(): {
     }
   }, [darkMode]);
 
-  return { darkMode: darkModeStored, setDarkModeStored };
+  return { darkMode: normalizedDarkModeStored, setDarkModeStored };
 }
 
 // Source: https://usehooks.com/useLocalStorage/

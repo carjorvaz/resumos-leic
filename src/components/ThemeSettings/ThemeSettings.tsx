@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  fonts,
   useContentWidth,
   useDarkMode,
   useFontSettings,
   useTextAlign,
   useThemeSettings,
 } from '../../hooks/theme-hooks';
+import { fonts } from '../../lib/reading-options';
 import Close from '../icons/Close';
 import DarkModeOff from '../icons/DarkModeOff';
 import DarkModeOn from '../icons/DarkModeOn';
@@ -29,7 +29,7 @@ const ThemeSettings = () => {
   const { darkMode, setDarkModeStored } = useDarkMode();
   const { contentWidth, setContentWidth } = useContentWidth();
   const { textAlign, setTextAlign } = useTextAlign();
-  const { fontLoader, font, setFont } = useFontSettings();
+  const { font, setFont } = useFontSettings();
   const { theme, setTheme } = useThemeSettings();
 
   // Load (previews of) all the fonts to show their preview on dropdown
@@ -129,7 +129,6 @@ const ThemeSettings = () => {
           </div>
         </Option>
         {panelOpen && fontPreviewsLoader}
-        {fontLoader}
         <Option name='Font'>
           <DropdownSelect id='font' value={font} onChange={(v) => setFont(v)}>
             {Object.entries(fonts).map(([fontName, fontOptions]) => (
