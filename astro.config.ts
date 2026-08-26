@@ -18,6 +18,7 @@ import { remarkImageData } from './src/remark/image-data';
 import { katexMacros } from './src/remark/katex-macros';
 import { remarkMermaid } from './src/remark/mermaid';
 import { collectText, headingAriaLabel, rehypeHeadingIds } from './src/remark/rehype-heading-ids';
+import { rehypeMathDisplay } from './src/remark/rehype-math-display';
 import './src/remark/prism-mips-asm';
 import { remarkToc } from './src/remark/toc';
 
@@ -132,6 +133,7 @@ export default defineConfig({
               context.command === '\\htmlClass' && /md-color--[a-zA-Z]+/.test(context.class),
           },
         ],
+        rehypeMathDisplay,
         [rehypeExternalLinks, { target: '_blank', rel: ['nofollow', 'noopener', 'noreferrer'] }],
       ],
     }),
