@@ -1,4 +1,4 @@
-import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { getCollection, type CollectionEntry } from 'astro:content';
 
 export type PageEntry = CollectionEntry<'pages'>;
 
@@ -31,11 +31,6 @@ export interface SidebarLink {
   id: string;
 }
 
-export interface SidebarSection extends SidebarLink {
-  key: string;
-  name?: string;
-}
-
 /**
  * Group pages into the sidebar sections declared in `siteConfig`, preserving
  * the config order and sorting links by file path (the Gatsby original sorted
@@ -63,17 +58,3 @@ export function getSidebarSections(
 
   return sections.filter(({ links }) => links.length > 0);
 }
-
-/** Title of the `topLevelPage` within the same subject (used by search). */
-export function getSectionTitle(pages: PageEntry[], subject: string): string | undefined {
-  return getSubjectPages(pages, subject).find((page) => page.data.type === 'topLevelPage')?.data
-    .title;
-}
-
-export async function getSectionTitleByPath(path: string): Promise<string | undefined> {
-  const pages = await getAllPages();
-  const subject = path.split('/')[1];
-  return getSectionTitle(pages, subject);
-}
-
-export { render };

@@ -7,13 +7,7 @@ import Footer from '../components/Footer.astro';
 import ExternalLink from '../components/ExternalLink.astro';
 import Edit from '../components/icons/Edit';
 import CalculatorHost from '../components/md-tools/CalculatorHost';
-import {
-  getAllPages,
-  getHomepage,
-  getSectionTitle,
-  getSidebarSections,
-  getSubjectPages,
-} from '../lib/pages';
+import { getAllPages, getSidebarSections, getSubjectPages } from '../lib/pages';
 import { siteConfig } from '../config';
 
 export async function getStaticPaths() {
@@ -30,11 +24,14 @@ const { entry } = Astro.props;
 const { Content } = await render(entry);
 
 const pages = await getAllPages();
-const homepage = await getHomepage();
+const homepage = pages.find((page) => page.data.path === '/');
 const subject = entry.data.path.split('/')[1];
-const sections = getSidebarSections(getSubjectPages(pages, subject), siteConfig.sidebarSections);
-const sectionTitle = getSectionTitle(pages, subject);
-const githubLink = `${siteConfig.footer.githubLink}/edit/master/content/${entry.id}.md`;
+const subjectPages = getSubjectPages(pages, subject);
+const sections = getSidebarSections(subjectPages, siteConfig.sidebarSections);
+const sectionTitle = subjectPages.find((page) => page.data.type === 'topLevelPage')?.data.title;
+const githubLink = entry.filePath
+  ? `${siteConfig.footer.githubLink}/edit/master/${entry.filePath.replace(/\\/g, '/')}`
+  : undefined;
 const componentNames = entry.data.components ?? [];
 ---
 

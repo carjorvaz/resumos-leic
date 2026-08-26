@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 
 const contentRoot = path.resolve(process.cwd(), 'content');
@@ -27,30 +28,72 @@ export function contentAssets(): Plugin {
   return {
     name: 'content-assets',
     configureServer(server) {
-      server.middlewares.use('/content/', async (req, res, next) => {
-        try {
-          const url = decodeURIComponent((req.url ?? '').split('?')[0]);
-          if (url.split('/').includes('..')) return next();
-          const filePath = path.resolve(contentRoot, url);
-          if (filePath !== contentRoot && !filePath.startsWith(contentRoot + path.sep)) {
-            return next();
-          }
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+        if (!(req.url ?? '').startsWith('/content/')) return next();
 
-          const data = await fs.readFile(filePath);
-          res.setHeader(
-            'Content-Type',
-            mimeTypes[path.extname(filePath)] ?? 'application/octet-stream'
-          );
-          res.end(data);
-        } catch {
-          next();
-        }
+        void serveContentAsset(req, res, next).catch(next);
       });
     },
     async writeBundle() {
       await copyContentAssets();
     },
   };
+}
+
+type MiddlewareNext = (error?: unknown) => void;
+
+async function serveContentAsset(req: IncomingMessage, res: ServerResponse, next: MiddlewareNext) {
+  const url = decodeURIComponent((req.url ?? '').split('?')[0]);
+  const filePath = path.resolve(contentRoot, url.slice('/content/'.length));
+  const relativePath = path.relative(contentRoot, filePath);
+
+  if (
+    relativePath === '..' ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
+    res.statusCode = 403;
+    res.end('Forbidden');
+    return;
+  }
+
+  try {
+    const canonicalRoot = await fs.realpath(contentRoot);
+    const canonicalPath = await fs.realpath(filePath);
+    const canonicalRelativePath = path.relative(canonicalRoot, canonicalPath);
+
+    if (
+      canonicalRelativePath === '..' ||
+      canonicalRelativePath.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(canonicalRelativePath)
+    ) {
+      res.statusCode = 403;
+      res.end('Forbidden');
+      return;
+    }
+
+    const stat = await fs.stat(canonicalPath);
+    if (!stat.isFile()) return next();
+
+    const data = await fs.readFile(canonicalPath);
+    res.setHeader('Content-Type', mimeTypes[path.extname(filePath)] ?? 'application/octet-stream');
+    res.setHeader('Content-Length', data.length);
+    if (req.method === 'HEAD') {
+      res.end();
+    } else {
+      res.end(data);
+    }
+  } catch (error) {
+    if (isMissingError(error)) return next();
+    throw error;
+  }
+}
+
+function isMissingError(error: unknown) {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+  const code = error.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
 async function copyContentAssets() {
