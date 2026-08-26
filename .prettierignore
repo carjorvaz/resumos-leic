@@ -3,3 +3,7 @@ dist/
 .astro/
 src/data/contributors.json
 data/.contributors-cache.json
+.github/ISSUE_TEMPLATE/incorrect_content.yml
+.github/ISSUE_TEMPLATE/incorrect_solution.yml
+.github/workflows/labeler.yml
+.github/labeler.yml

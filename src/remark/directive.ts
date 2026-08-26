@@ -162,10 +162,10 @@ const onLeafDirectiveVisit = (node: LeafDirectiveNode): void => {
  * empty blocks.
  */
 const repairUnknownDirectives = (tree: Root, file: VFile): void => {
-    const source = 'value' in file ? file.value : undefined;
+  const source = 'value' in file ? file.value : undefined;
   if (typeof source !== 'string') return;
 
-    const repair = (
+  const repair = (
     node: DirectiveNode,
     index: number | undefined,
     parent: Parent | undefined
@@ -180,10 +180,10 @@ const repairUnknownDirectives = (tree: Root, file: VFile): void => {
   };
 
   visit(tree, 'leafDirective', (node, index, parent) => {
-        if (parent) repair(node as DirectiveNode, index, parent);
+    if (parent) repair(node as DirectiveNode, index, parent);
   });
   visit(tree, 'textDirective', (node, index, parent) => {
-        if (parent) repair(node as DirectiveNode, index, parent);
+    if (parent) repair(node as DirectiveNode, index, parent);
   });
 };
 

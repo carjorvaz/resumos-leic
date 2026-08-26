@@ -41,7 +41,7 @@ export function remarkContentAssets() {
       }
 
       if (index === undefined || !parent) return;
-            if (rasterExtensions[path.extname(cleanUrl).toLowerCase()]) {
+      if (rasterExtensions[path.extname(cleanUrl).toLowerCase()]) {
         const original = `/content/${path.posix.join(directory, cleanUrl)}`;
         parent.children[index] = {
           type: 'link',
