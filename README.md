@@ -12,17 +12,25 @@ Se já percebes do assunto e apenas queres instruções rápidas, segue os passo
 
 ### Instalar ferramentas
 
-Para correr o código localmente, é necessário as seguintes ferramentas: `git`, `nodejs` (22 ou superior) e `npm`.
+Para correr o código localmente, são necessárias as seguintes ferramentas: `git`, Node.js `>=22.12.0` (versão 22 definida em `.nvmrc`) e Yarn Classic.
 
 #### Windows
 
 1. Fazer [download do `git`](http://git-scm.com/) e instalar o executável.
-2. Fazer [download do `node`](https://nodejs.org/en/) e instalar a última versão LTS (22.X ou superior).
+2. Fazer [download do `node`](http://nodejs.org/en/) e instalar Node.js 22.12.0 ou superior.
 
 #### Linux/macOS
 
-1. Instalar o `git` e o `node` pelo package manager da distribuição. Atenção que o `node` em Debian/Ubuntu/etc está desatualizado.
-   Recomendo seguir [este tutorial](https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04#option-3-installing-node-using-the-node-version-manager) para ter o Node 22 LTS.
+1. Instalar o `git` e o Node.js pelo package manager da distribuição. Atenção que o Node.js em Debian/Ubuntu/etc está desatualizado.
+   Recomendo seguir [este tutorial](https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04#option-3-installing-node-using-the-node-version-manager) para ter o Node.js 22 LTS.
+
+Para ativar o Yarn Classic, executar:
+
+```bash
+corepack enable
+```
+
+Se o Corepack não estiver disponível na instalação do Node.js, executar `npm install --global corepack` e repetir `corepack enable`.
 
 ### Obter os ficheiros necessários
 
@@ -42,8 +50,7 @@ Para correr o código localmente, é necessário as seguintes ferramentas: `git`
 4. Instalar dependências:
 
    ```bash
-   cd resumos-leic
-   npm install
+   yarn install --frozen-lockfile
    ```
 
 ### Alterar conteúdos
@@ -67,7 +74,7 @@ Cada ficheiro deve conter um _header_ com a meta-informação útil corresponden
 Para iniciar o servidor local, correr o comando:
 
 ```bash
-npm run dev
+yarn dev
 ```
 
 ### Formatar o código
@@ -75,5 +82,5 @@ npm run dev
 Antes de fazer um commit, é recomendado executar o `prettier` (se usarem um editor de texto - e.g. VSCode - que já executa automaticamente, não é preciso). Devem correr o comando na raiz do _repo_ (`/home/.../resumos-leic`, portanto).
 
 ```bash
-npm run format
+yarn format
 ```

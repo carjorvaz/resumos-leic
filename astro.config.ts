@@ -7,7 +7,6 @@ import rehypeKatex from 'rehype-katex';
 import rehypePrismPlus from 'rehype-prism-plus';
 import type { TrustContext } from 'katex';
 import remarkDirective from 'remark-directive';
-import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { contentAssets } from './src/lib/content-assets';
 import { remarkColor } from './src/remark/color';
@@ -68,7 +67,6 @@ export default defineConfig({
       // byte-identical (e.g. `etc...` must not become `etc…`).
       smartypants: false,
       remarkPlugins: [
-        remarkGfm,
         remarkMath,
         remarkDirective,
         remarkColor,

@@ -7,3 +7,9 @@ data/.contributors-cache.json
 .github/ISSUE_TEMPLATE/incorrect_solution.yml
 .github/workflows/labeler.yml
 .github/labeler.yml
+
+# No prettier parser available
+netlify.toml
+wrangler.toml
+.nvmrc
+shell.nix
