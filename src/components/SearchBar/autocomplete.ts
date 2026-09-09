@@ -1,8 +1,4 @@
-import type {
-  AutocompleteSource,
-  GetSourcesParams,
-  OnSelectParams,
-} from '@algolia/autocomplete-core';
+import type { GetSourcesParams, OnSelectParams } from '@algolia/autocomplete-core';
 import type { Meilisearch } from 'meilisearch';
 import { withTrailingSlash } from '../../lib/site-path';
 
@@ -30,7 +26,7 @@ export interface HomepageYear {
 export function createGetSources({
   searchClient,
   indexName,
-  onClose,
+  onNavigate,
   onError,
   onSuccess,
   begin,
@@ -39,14 +35,19 @@ export function createGetSources({
 }: {
   searchClient: Meilisearch;
   indexName: string;
-  onClose: () => void;
+  onNavigate: () => void;
   onError: () => void;
   onSuccess: () => void;
   begin: () => number;
   isCurrent: (requestGeneration: number) => boolean;
   section?: string;
 }) {
-  return async ({ query, setContext }: GetSourcesParams<SearchHit>) => {
+  return async ({
+    query,
+    setContext,
+    setCollections,
+    setActiveItemId,
+  }: GetSourcesParams<SearchHit>) => {
     const requestGeneration = begin();
 
     if (!query) {
@@ -83,9 +84,15 @@ export function createGetSources({
 
       return Object.entries(groupedHits).map(([title, sectionHits]) => ({
         sourceId: `hit_${title}`,
-        onSelect({ item, event }: OnSelectParams<SearchHit>) {
-          if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
-            onClose();
+        onSelect({ event }: OnSelectParams<SearchHit>) {
+          if (
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            (!('button' in event) || event.button === 0)
+          ) {
+            onNavigate();
           }
         },
         getItemUrl({ item }: { item: SearchHit }) {
@@ -98,6 +105,10 @@ export function createGetSources({
     } catch {
       // Failed to fetch from meilisearch backend
       if (isCurrent(requestGeneration)) {
+        // Tab can cancel the normal collections commit without stopping this request.
+        // Clear this instance's selectable hits before publishing the exclusive error view.
+        setCollections([]);
+        setActiveItemId(null);
         onError();
       }
       return [];
@@ -111,13 +122,6 @@ export function stripDomainFromLink(url?: string) {
   const parsedUrl = new URL(url);
   return withTrailingSlash(parsedUrl.href.replace(parsedUrl.origin, ''));
 }
-
-// Override Autocomplete's default navigation behaviour with a full page navigation
-export const navigator = Object.freeze({
-  navigate({ itemUrl }: { itemUrl: string }) {
-    window.location.assign(itemUrl);
-  },
-} as const);
 
 // Group elements by a specific key
 export function groupElementsByKey<T>(list: T[], key: string): Record<string, T[]> {

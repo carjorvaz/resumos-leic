@@ -1,6 +1,6 @@
 import type { Meilisearch } from 'meilisearch';
 import type * as MeilisearchModule from 'meilisearch';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { siteConfig } from '../../config';
 import Dialog from '../Dialog/Dialog';
 import Search from '../icons/Search';
@@ -23,19 +23,11 @@ const SearchBar = ({ section, years }: SearchBarProps) => {
   const searchTriggerRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const returnDialogRef = useRef<HTMLElement | null>(null);
-  const returnFocusTimeoutRef = useRef<number | null>(null);
-  const cancelPendingFocusReturn = useCallback(() => {
-    if (returnFocusTimeoutRef.current !== null) {
-      window.clearTimeout(returnFocusTimeoutRef.current);
-      returnFocusTimeoutRef.current = null;
-    }
-  }, []);
   const handleOpenSearch = useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
       if (open) {
         return;
       }
-      cancelPendingFocusReturn();
       const focusTarget = event?.currentTarget ?? document.activeElement;
       returnFocusRef.current = focusTarget instanceof HTMLElement ? focusTarget : null;
       returnDialogRef.current =
@@ -44,46 +36,63 @@ const SearchBar = ({ section, years }: SearchBarProps) => {
           : null;
       setOpen(true);
     },
-    [cancelPendingFocusReturn, open]
+    [open]
   );
-  const handleCloseSearch = useCallback(() => {
-    if (!open) {
+  const handleNavigate = useCallback(() => {
+    returnFocusRef.current = null;
+    returnDialogRef.current = null;
+    window.dispatchEvent(new Event('resumos:search-navigate'));
+    setOpen(false);
+  }, []);
+  const handleCloseSearch = useCallback(() => setOpen(false), []);
+  useLayoutEffect(() => {
+    if (open || !returnFocusRef.current) return;
+    const focusTarget = returnFocusRef.current;
+    const dialog = returnDialogRef.current;
+    returnFocusRef.current = null;
+    returnDialogRef.current = null;
+    if (
+      document.activeElement !== document.body &&
+      document.activeElement !== document.documentElement
+    ) {
       return;
     }
-    setOpen(false);
-    cancelPendingFocusReturn();
-    returnFocusTimeoutRef.current = window.setTimeout(() => {
-      returnFocusTimeoutRef.current = null;
-      const focusTarget = returnFocusRef.current;
-      const dialog = returnDialogRef.current;
-      returnFocusRef.current = null;
-      returnDialogRef.current = null;
-      const isDocumentRoot =
-        focusTarget === document.body || focusTarget === document.documentElement;
-      if (focusTarget?.isConnected && !isDocumentRoot) {
-        focusTarget.focus();
-        if (document.activeElement === focusTarget) {
-          return;
-        }
+    const isDocumentRoot =
+      focusTarget === document.body || focusTarget === document.documentElement;
+    if (focusTarget.isConnected && !isDocumentRoot) {
+      const withinVisibleDialog =
+        dialog?.isConnected &&
+        !dialog.hidden &&
+        dialog.getAttribute('aria-hidden') !== 'true' &&
+        dialog.contains(focusTarget) &&
+        dialog.getClientRects().length > 0 &&
+        getComputedStyle(dialog).visibility === 'visible';
+      const drawer = focusTarget.closest<HTMLElement>('#course-sidebar');
+      const withinVisibleDrawer =
+        drawer?.isConnected &&
+        !drawer.hidden &&
+        !drawer.inert &&
+        drawer.getAttribute('aria-hidden') !== 'true' &&
+        drawer.getClientRects().length > 0 &&
+        getComputedStyle(drawer).visibility === 'visible' &&
+        getComputedStyle(drawer).overflowY === 'auto';
+      // Native focus reveals nested modal/sidebar controls; page openers must not scroll.
+      if (!drawer || withinVisibleDrawer) {
+        focusTarget.focus({ preventScroll: !withinVisibleDialog && !withinVisibleDrawer });
+        if (document.activeElement === focusTarget) return;
       }
-      if (dialog?.isConnected && !dialog.hidden && dialog.getAttribute('aria-hidden') !== 'true') {
-        dialog.focus();
-        if (document.activeElement === dialog) {
-          return;
-        }
-      }
-      const trigger = searchTriggerRef.current;
-      if (trigger?.isConnected) {
-        trigger.focus();
-      }
-    }, 0);
-  }, [cancelPendingFocusReturn, open]);
+    }
+    if (dialog?.isConnected && !dialog.hidden && dialog.getAttribute('aria-hidden') !== 'true') {
+      dialog.focus({ preventScroll: true });
+      if (document.activeElement === dialog) return;
+    }
+    searchTriggerRef.current?.focus({ preventScroll: true });
+  }, [open]);
   const handleToggleFilterBySection = useCallback(() => {
     setFilterBySection((value) => !value);
   }, []);
   const { host, apiKey, indexName } = siteConfig.search;
   const [searchResources, setSearchResources] = useState<LoadedSearch | null>(null);
-  useEffect(() => () => cancelPendingFocusReturn(), [cancelPendingFocusReturn]);
   useEffect(() => {
     if (!open || searchResources) {
       return;
@@ -136,6 +145,7 @@ const SearchBar = ({ section, years }: SearchBarProps) => {
         !event.shiftKey &&
         open
       ) {
+        event.preventDefault();
         handleCloseSearch();
       }
     };
@@ -162,16 +172,26 @@ const SearchBar = ({ section, years }: SearchBarProps) => {
         </span>
       </button>
       <Dialog open={open} onClose={handleCloseSearch} label='Search'>
-        {searchClient && SearchModal && (
+        {searchClient && SearchModal ? (
           <SearchModal
             searchClient={searchClient}
             indexName={indexName}
             onClose={handleCloseSearch}
+            onNavigate={handleNavigate}
             section={section}
             years={years}
             filterBySection={filterBySection}
             handleToggleFilterBySection={handleToggleFilterBySection}
           />
+        ) : (
+          <header className='search-header'>
+            <span className='search-form' role='status'>
+              Loading search…
+            </span>
+            <button className='search-close' onClick={handleCloseSearch} aria-label='Close search'>
+              Close
+            </button>
+          </header>
         )}
       </Dialog>
     </>

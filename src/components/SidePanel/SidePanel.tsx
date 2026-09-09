@@ -51,6 +51,7 @@ const SidePanel = ({ open, onClose, label, className, children }: SidePanelProps
         className='sidepanel-backdrop'
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
+            event.preventDefault();
             onClose();
           }
         }}

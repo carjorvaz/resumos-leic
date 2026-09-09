@@ -68,6 +68,7 @@
 
 .section-button img {
   width: 5rem;
+  height: auto;
   position: absolute;
   right: 0.5rem;
   bottom: 1rem;

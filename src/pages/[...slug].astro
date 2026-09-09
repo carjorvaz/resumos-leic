@@ -51,31 +51,33 @@ const componentNames = entry.data.components ?? [];
     <div class='sidebar-mask'></div>
     <Navbar toggleSidebar section={sectionTitle} years={homepage?.data.years} />
     <Sidebar sections={sections} currentPath={entry.data.path} />
-    <main id='main-content' class='main-container'>
-      {
-        githubLink && (
-          <ExternalLink href={githubLink} class='edit-link'>
-            <Edit /> Edit page
-          </ExternalLink>
-        )
-      }
-      <div class='content'>
-        <Content />
-      </div>
-      {
-        entry.data.type === 'topLevelPage' && (
-          <CourseContents sections={sections} currentPath={entry.data.path} />
-        )
-      }
-      {componentNames.map((name) => <CalculatorHost name={name} client:visible />)}
-      {
-        entry.data.type !== 'topLevelPage' && (previous || next) && (
-          <ArticleNavigation previous={previous} next={next} />
-        )
-      }
+    <div class='main-container'>
+      <main id='main-content'>
+        {
+          githubLink && (
+            <ExternalLink href={githubLink} class='edit-link'>
+              <Edit /> Edit page
+            </ExternalLink>
+          )
+        }
+        <div class='content'>
+          <Content />
+        </div>
+        {
+          entry.data.type === 'topLevelPage' && (
+            <CourseContents sections={sections} currentPath={entry.data.path} />
+          )
+        }
+        {componentNames.map((name) => <CalculatorHost name={name} client:visible />)}
+        {
+          entry.data.type !== 'topLevelPage' && (previous || next) && (
+            <ArticleNavigation previous={previous} next={next} />
+          )
+        }
+      </main>
       <div style='flex-grow: 1'></div>
       <Footer />
-    </main>
+    </div>
   </div>
 </BaseLayout>
 <script>

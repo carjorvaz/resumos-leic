@@ -2,7 +2,7 @@ import { createAutocomplete } from '@algolia/autocomplete-core';
 import type { AutocompleteState } from '@algolia/autocomplete-core';
 import type { Meilisearch } from 'meilisearch';
 import React from 'react';
-import { createGetSources, navigator } from './autocomplete';
+import { createGetSources } from './autocomplete';
 import type { HomepageYear, SearchHit } from './autocomplete';
 import ResultsContainer from './ResultsContainer';
 import SearchForm from './SearchForm';
@@ -22,6 +22,7 @@ interface SearchModalProps {
   searchClient: Meilisearch;
   indexName: string;
   onClose: () => void;
+  onNavigate: () => void;
   section?: string;
   years?: HomepageYear[];
   filterBySection: boolean;
@@ -32,6 +33,7 @@ const SearchModal = ({
   searchClient,
   indexName,
   onClose,
+  onNavigate,
   section,
   years,
   filterBySection,
@@ -41,6 +43,7 @@ const SearchModal = ({
   const formElementRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const resultsContainerRef = React.useRef<HTMLDivElement>(null);
+  const focusedResultRef = React.useRef<HTMLElement | null>(null);
   const requestGenerationRef = React.useRef(0);
   const beginRequest = React.useCallback(() => {
     requestGenerationRef.current += 1;
@@ -55,6 +58,22 @@ const SearchModal = ({
   const [state, setState] = React.useState<AutocompleteState<SearchHit>>(initialState);
   const [hasSearchError, setHasSearchError] = React.useState(false);
 
+  // Core controllers can disagree with the rendered collections. Recover only
+  // after a commit actually detaches the element that owned result focus.
+  React.useLayoutEffect(() => {
+    const focusedResult = focusedResultRef.current;
+    if (!focusedResult || focusedResult.isConnected) return;
+    focusedResultRef.current = null;
+    if (
+      document.activeElement === document.body ||
+      document.activeElement === document.documentElement
+    ) {
+      formElementRef.current
+        ?.querySelector<HTMLButtonElement>('.search-close')
+        ?.focus({ preventScroll: true });
+    }
+  });
+
   React.useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
@@ -68,14 +87,13 @@ const SearchModal = ({
       defaultActiveItemId: 0,
       placeholder: `Search ${(filterBySection && section) || 'entire site'}...`,
       openOnFocus: true,
-      navigator,
       onStateChange(props) {
         setState(props.state);
       },
       getSources: createGetSources({
         searchClient,
         indexName,
-        onClose,
+        onNavigate,
         onError: () => setHasSearchError(true),
         onSuccess: () => setHasSearchError(false),
         begin: beginRequest,
@@ -84,14 +102,15 @@ const SearchModal = ({
       }),
       initialState: { ...initialState, query: state.query },
     });
-  }, [searchClient, filterBySection, section, onClose, beginRequest, isCurrentRequest]);
-
-  const onItemClick = React.useCallback(
-    (item: SearchHit) => {
-      onClose();
-    },
-    [onClose]
-  );
+  }, [
+    searchClient,
+    indexName,
+    filterBySection,
+    section,
+    onNavigate,
+    beginRequest,
+    isCurrentRequest,
+  ]);
 
   const {
     getEnvironmentProps,
@@ -120,13 +139,21 @@ const SearchModal = ({
           onClose={onClose}
         />
       </header>
-      <div ref={resultsContainerRef} className='search-results'>
+      <div
+        ref={resultsContainerRef}
+        className='search-results'
+        onFocusCapture={(event) => {
+          focusedResultRef.current = event.target instanceof HTMLElement ? event.target : null;
+        }}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) focusedResultRef.current = null;
+        }}
+      >
         <ResultsContainer
           state={state}
           hasSearchError={hasSearchError}
           getListProps={getListProps}
           getItemProps={getItemProps}
-          onItemClick={onItemClick}
           years={years}
         />
       </div>

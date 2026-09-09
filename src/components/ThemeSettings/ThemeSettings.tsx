@@ -67,6 +67,19 @@ const ThemeSettings = () => {
       }
     };
   }, []);
+  useEffect(() => {
+    const handleSearchNavigate = () => {
+      if (closeFocusTimeoutRef.current !== null) {
+        window.clearTimeout(closeFocusTimeoutRef.current);
+        closeFocusTimeoutRef.current = null;
+      }
+      setPanelOpen(false);
+    };
+    window.addEventListener('resumos:search-navigate', handleSearchNavigate);
+    return () => {
+      window.removeEventListener('resumos:search-navigate', handleSearchNavigate);
+    };
+  }, []);
   const { darkMode, setDarkModeStored } = useDarkMode();
   const { contentWidth, setContentWidth } = useContentWidth();
   const { textAlign, setTextAlign } = useTextAlign();

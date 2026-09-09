@@ -59,11 +59,6 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
   );
 }
 
-function focusAndVerify(element: HTMLElement): boolean {
-  element.focus();
-  return document.activeElement === element;
-}
-
 export function useTrapFocus({ containerRef, active }: UseTrapFocusOptions): void {
   useLayoutEffect(() => {
     if (!active || !containerRef.current) {
@@ -71,20 +66,23 @@ export function useTrapFocus({ containerRef, active }: UseTrapFocusOptions): voi
     }
 
     const container = containerRef.current;
-    const focusTimer = window.setTimeout(() => {
+    const isForeground = () =>
+      !container.classList.contains('sidepanel-modal') ||
+      !document.body.classList.contains('body--dialog-open');
+    if (isForeground() && !container.contains(document.activeElement)) {
       const initialTarget = getFocusableElements(container)[0] ?? container;
-      focusAndVerify(initialTarget);
-    }, 50);
+      initialTarget.focus({ preventScroll: true });
+    }
 
     function trapFocus(event: KeyboardEvent): void {
-      if (event.key !== 'Tab') {
+      if (event.key !== 'Tab' || event.defaultPrevented || !isForeground()) {
         return;
       }
 
       const focusableElements = getFocusableElements(container);
       if (focusableElements.length === 0) {
         event.preventDefault();
-        focusAndVerify(container);
+        container.focus({ preventScroll: true });
         return;
       }
 
@@ -97,18 +95,17 @@ export function useTrapFocus({ containerRef, active }: UseTrapFocusOptions): voi
       if (event.shiftKey) {
         if (!activeInside || activeElement === container || activeElement === firstElement) {
           event.preventDefault();
-          focusAndVerify(lastElement);
+          lastElement.focus();
         }
       } else if (!activeInside || activeElement === container || activeElement === lastElement) {
         event.preventDefault();
-        focusAndVerify(firstElement);
+        firstElement.focus();
       }
     }
 
     container.addEventListener('keydown', trapFocus);
 
     return () => {
-      window.clearTimeout(focusTimer);
       container.removeEventListener('keydown', trapFocus);
     };
   }, [active, containerRef]);

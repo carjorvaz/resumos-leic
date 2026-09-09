@@ -9,7 +9,6 @@ interface ResultsContainerProps {
   hasSearchError: boolean;
   getListProps: AutocompleteApi<SearchHit>['getListProps'];
   getItemProps: AutocompleteApi<SearchHit>['getItemProps'];
-  onItemClick: (item: SearchHit) => void;
   years?: HomepageYear[];
 }
 
@@ -18,7 +17,6 @@ const ResultsContainer = ({
   hasSearchError,
   getListProps,
   getItemProps,
-  onItemClick,
   years,
 }: ResultsContainerProps) => {
   const hasCollections = state.collections.some((collection) => collection.items.length > 0);
@@ -51,7 +49,6 @@ const ResultsContainer = ({
             title={title}
             getListProps={getListProps}
             getItemProps={getItemProps}
-            onItemClick={onItemClick}
           />
         );
       })}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTrapFocus } from '../../hooks/useTrapFocus';
@@ -15,7 +15,7 @@ interface DialogProps {
 }
 
 const Dialog = ({ open, onClose, children, label }: DialogProps) => {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) {
       document.body.classList.add(BODY_DIALOG_OPEN_CLASSNAME);
     } else {
@@ -40,6 +40,7 @@ const Dialog = ({ open, onClose, children, label }: DialogProps) => {
       className='dialog-container'
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
+          event.preventDefault();
           onClose();
         }
       }}

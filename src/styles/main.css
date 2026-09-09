@@ -337,7 +337,8 @@ body.body--sidebar-open {
 }
 
 @media print {
-  .sidebar {
+  .sidebar,
+  .sidebar-open .sidebar-mask {
     display: none;
   }
 
@@ -348,7 +349,7 @@ body.body--sidebar-open {
 
 .edit-link {
   width: fit-content;
-  align-self: flex-end;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 5px;
