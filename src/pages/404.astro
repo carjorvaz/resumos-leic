@@ -15,7 +15,13 @@ const years = homepage?.data.years;
     <p>Não existe a página que procuras...</p>
     <a href='/'>Voltar à página inicial</a>
     <div style='margin-top: 1rem'>
-      <img src={NotFoundImage.src} alt='' />
+      <img
+        src={NotFoundImage.src}
+        alt=''
+        width={NotFoundImage.width}
+        height={NotFoundImage.height}
+        style='max-width: 100%; height: auto'
+      />
     </div>
   </div>
 </BaseLayout>

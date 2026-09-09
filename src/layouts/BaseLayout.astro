@@ -5,7 +5,6 @@ import '../styles/main.css';
 import '../styles/markdown.css';
 import { siteConfig } from '../config';
 import { noFlashScript } from '../lib/no-flash';
-import { fonts, readingDefaults } from '../lib/reading-options';
 
 interface Props {
   title?: string;
@@ -14,7 +13,7 @@ interface Props {
 
 const { title, description } = Astro.props;
 const pageTitle = title ? `${title} | ${siteConfig.title}` : siteConfig.title;
-const pageDescription = description ?? siteConfig.description;
+const pageDescription = description || siteConfig.description;
 ---
 
 <!doctype html>
@@ -54,11 +53,7 @@ const pageDescription = description ?? siteConfig.description;
     <meta name='description' content={pageDescription} />
     <link rel='preconnect' href='https://fonts.googleapis.com' />
     <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin />
-    <link
-      id='selected-font-stylesheet'
-      rel='stylesheet'
-      href={fonts[readingDefaults.customFont].url}
-    />
+    <link id='selected-font-stylesheet' rel='stylesheet' />
     <link rel='manifest' href='/manifest.webmanifest' />
     {
       import.meta.env.PROD && (
