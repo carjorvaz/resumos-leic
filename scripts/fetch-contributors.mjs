@@ -1,5 +1,6 @@
 import { graphql } from '@octokit/graphql';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,18 +23,53 @@ const contributorsPath = join(repoRoot, 'src/data/contributors.json');
 
 function writeJsonFile(filePath, value) {
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  // Write atomically (temp file + rename) so an interrupted run never leaves
+  // a truncated file that would trip the guarded fallback reads below.
+  const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`);
+    renameSync(tmpPath, filePath);
+  } finally {
+    try {
+      unlinkSync(tmpPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
 }
 
-function readCache() {
-  if (!existsSync(cachePath)) {
-    return null;
-  }
+function readJsonFile(filePath) {
   try {
-    return JSON.parse(readFileSync(cachePath, 'utf8'));
+    return JSON.parse(readFileSync(filePath, 'utf8'));
   } catch {
     return null;
   }
+}
+
+function isContributor(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  if (typeof value.username !== 'string' || value.username.length === 0) {
+    return false;
+  }
+
+  if (value.name !== undefined && typeof value.name !== 'string') {
+    return false;
+  }
+
+  return ['labels', 'additionalLabels', 'boldLabels'].every(
+    (field) =>
+      value[field] === undefined ||
+      (Array.isArray(value[field]) && value[field].every((label) => typeof label === 'string'))
+  );
+}
+
+function isContributorData(value) {
+  return Array.isArray(value) && value.every(isContributor);
 }
 
 // mutates `contributors`
@@ -54,14 +90,16 @@ function mergeContributors(contributors, pullRequests) {
 }
 
 // mutates `contributors`
-function mergeContributorsFromCache(contributors, cachedContributors) {
-  cachedContributors.forEach(({ name, username, labels }) => {
+function mergeSavedContributors(contributors, savedContributors) {
+  savedContributors.forEach(({ name, username, labels }) => {
     const contributor = contributors[username] || (contributors[username] = {});
     const labelSet = contributor.labels || (contributor.labels = new Set());
 
     labels?.forEach((label) => labelSet.add(label));
 
-    if (!contributor.name) {
+    // Saved username-valued names may be generated fallbacks, not fetched names.
+    // Current defaults are already present, including explicit username overrides.
+    if (!contributor.name && name !== username) {
       contributor.name = name;
     }
   });
@@ -76,11 +114,24 @@ function toContributorData(contributors) {
   }));
 }
 
+// Local overrides are authoritative; saved records supply only fetched names
+// and labels. Prefer output names, but union both sources so neither loses credit.
+const contributors = Object.assign(Object.create(null), getDefaultContributors());
+const existingContributors = readJsonFile(contributorsPath);
+const cache = readJsonFile(cachePath);
+const cachedContributors = isContributorData(cache?.contributors) ? cache.contributors : [];
+if (isContributorData(existingContributors)) {
+  mergeSavedContributors(contributors, existingContributors);
+}
+mergeSavedContributors(contributors, cachedContributors);
+
+// Materialize the fallback before fetching: tokenless runs and API failures use
+// the same reconciled data, with defaults alone only when no saved data is usable.
+writeJsonFile(contributorsPath, toContributorData(contributors));
+
 const githubToken = process.env.GITHUB_TOKEN;
 if (!githubToken) {
-  console.info('No GitHub token found (GITHUB_TOKEN env var), skipping contributors list');
-
-  writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
+  console.info('No GitHub token found (GITHUB_TOKEN env var), using saved contributors');
 } else {
   const graphqlGh = graphql.defaults({
     headers: {
@@ -88,14 +139,16 @@ if (!githubToken) {
     },
   });
 
-  const contributors = getDefaultContributors();
+  const newLastUpdated = Date.now();
   const owner = githubOwner;
   const repoName = githubRepository;
 
-  const cache = readCache();
-  const lastUpdated = cache?.lastUpdated ?? null;
-  mergeContributorsFromCache(contributors, cache?.contributors ?? []);
-  const newLastUpdated = Date.now();
+  const lastUpdated =
+    isContributorData(cache?.contributors) &&
+    Number.isFinite(cache.lastUpdated) &&
+    cache.lastUpdated > 0
+      ? cache.lastUpdated
+      : null;
 
   const getPullRequests = async (cursor) => {
     const { repository } = await graphqlGh(
@@ -140,13 +193,23 @@ if (!githubToken) {
   };
 
   let lastResponse = null;
-  do {
-    lastResponse = await getPullRequests(lastResponse?.pageInfo?.endCursor ?? null);
-    mergeContributors(contributors, lastResponse.nodes);
-  } while (
-    lastResponse.pageInfo?.hasNextPage &&
-    (!lastUpdated || lastUpdated <= new Date(lastResponse.nodes.at(-1)?.updatedAt))
-  );
+  try {
+    do {
+      lastResponse = await getPullRequests(lastResponse?.pageInfo?.endCursor ?? null);
+      mergeContributors(contributors, lastResponse.nodes);
+    } while (
+      lastResponse.pageInfo?.hasNextPage &&
+      (!lastUpdated || lastUpdated <= new Date(lastResponse.nodes.at(-1)?.updatedAt))
+    );
+  } catch (error) {
+    // The reconciled output is already written. Leave the cache checkpoint
+    // unchanged so the next successful refresh retries every unfinished page.
+    console.warn(
+      'Failed to fetch contributors from GitHub, using saved contributors:',
+      error.message
+    );
+    process.exit(0);
+  }
 
   const contributorsData = toContributorData(contributors);
   writeJsonFile(cachePath, { lastUpdated: newLastUpdated, contributors: contributorsData });

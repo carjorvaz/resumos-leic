@@ -12,12 +12,12 @@ Se já percebes do assunto e apenas queres instruções rápidas, segue os passo
 
 ### Instalar ferramentas
 
-Para correr o código localmente, são necessárias as seguintes ferramentas: `git`, Node.js `>=22.12.0` (versão 22 definida em `.nvmrc`) e Yarn Classic.
+Para correr o código localmente, são necessárias as seguintes ferramentas: `git`, Node.js `>=22.19.0` (versão 22 definida em `.nvmrc`) e Yarn Classic.
 
 #### Windows
 
 1. Fazer [download do `git`](http://git-scm.com/) e instalar o executável.
-2. Fazer [download do `node`](http://nodejs.org/en/) e instalar Node.js 22.12.0 ou superior.
+2. Fazer [download do `node`](http://nodejs.org/en/) e instalar Node.js 22.19.0 ou superior.
 
 #### Linux/macOS
 
@@ -39,6 +39,7 @@ Se o Corepack não estiver disponível na instalação do Node.js, executar `npm
 
    ```bash
    git clone git@github.com:<o-teu-username>/resumos-leic.git
+   cd resumos-leic
    ```
 
 3. Adicionar o remote `upstream` ao repositório:
@@ -52,6 +53,8 @@ Se o Corepack não estiver disponível na instalação do Node.js, executar `npm
    ```bash
    yarn install --frozen-lockfile
    ```
+
+`yarn dev`, `yarn build` e `yarn run check` geram os dados de contribuidores antes de executar o Astro, incluindo num clone novo. Sem `GITHUB_TOKEN`, são combinados os dados guardados com as contribuições definidas no repositório; sem dados guardados válidos, usam-se apenas estas últimas. Com o token, a atualização consulta o GitHub e mantém os dados guardados se a API falhar.
 
 ### Alterar conteúdos
 

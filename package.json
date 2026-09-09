@@ -7,15 +7,17 @@
   "packageManager": "yarn@1.22.19",
   "repository": "https://github.com/leic-pt/resumos-leic",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "predev": "node scripts/fetch-contributors.mjs",
     "prebuild": "node scripts/fetch-contributors.mjs",
+    "precheck": "node scripts/fetch-contributors.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
+    "test": "node --test scripts/remark.test.mjs",
     "format": "prettier -w .",
     "format:check": "prettier --check ."
   },
