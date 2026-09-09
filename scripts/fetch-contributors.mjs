@@ -1,13 +1,6 @@
 import { graphql } from '@octokit/graphql';
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,12 +40,9 @@ function writeJsonFile(filePath, value) {
   }
 }
 
-function readCache() {
-  if (!existsSync(cachePath)) {
-    return null;
-  }
+function readJsonFile(filePath) {
   try {
-    return JSON.parse(readFileSync(cachePath, 'utf8'));
+    return JSON.parse(readFileSync(filePath, 'utf8'));
   } catch {
     return null;
   }
@@ -78,17 +68,8 @@ function isContributor(value) {
   );
 }
 
-function readContributors() {
-  if (!existsSync(contributorsPath)) {
-    return null;
-  }
-
-  try {
-    const contributors = JSON.parse(readFileSync(contributorsPath, 'utf8'));
-    return Array.isArray(contributors) && contributors.every(isContributor) ? contributors : null;
-  } catch {
-    return null;
-  }
+function isContributorData(value) {
+  return Array.isArray(value) && value.every(isContributor);
 }
 
 // mutates `contributors`
@@ -109,14 +90,16 @@ function mergeContributors(contributors, pullRequests) {
 }
 
 // mutates `contributors`
-function mergeContributorsFromCache(contributors, cachedContributors) {
-  cachedContributors.forEach(({ name, username, labels }) => {
+function mergeSavedContributors(contributors, savedContributors) {
+  savedContributors.forEach(({ name, username, labels }) => {
     const contributor = contributors[username] || (contributors[username] = {});
     const labelSet = contributor.labels || (contributor.labels = new Set());
 
     labels?.forEach((label) => labelSet.add(label));
 
-    if (!contributor.name) {
+    // Saved username-valued names may be generated fallbacks, not fetched names.
+    // Current defaults are already present, including explicit username overrides.
+    if (!contributor.name && name !== username) {
       contributor.name = name;
     }
   });
@@ -131,18 +114,24 @@ function toContributorData(contributors) {
   }));
 }
 
+// Local overrides are authoritative; saved records supply only fetched names
+// and labels. Prefer output names, but union both sources so neither loses credit.
+const contributors = Object.assign(Object.create(null), getDefaultContributors());
+const existingContributors = readJsonFile(contributorsPath);
+const cache = readJsonFile(cachePath);
+const cachedContributors = isContributorData(cache?.contributors) ? cache.contributors : [];
+if (isContributorData(existingContributors)) {
+  mergeSavedContributors(contributors, existingContributors);
+}
+mergeSavedContributors(contributors, cachedContributors);
+
+// Materialize the fallback before fetching: tokenless runs and API failures use
+// the same reconciled data, with defaults alone only when no saved data is usable.
+writeJsonFile(contributorsPath, toContributorData(contributors));
+
 const githubToken = process.env.GITHUB_TOKEN;
 if (!githubToken) {
-  console.info('No GitHub token found (GITHUB_TOKEN env var), skipping contributors list');
-
-  // Never overwrite a valid existing contributors file without a token: it may
-  // hold real data fetched in a previous run. Bootstrap defaults when the file
-  // is missing, unreadable, or malformed.
-  if (readContributors() === null) {
-    writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
-  } else {
-    console.info(`Keeping existing ${contributorsPath}`);
-  }
+  console.info('No GitHub token found (GITHUB_TOKEN env var), using saved contributors');
 } else {
   const graphqlGh = graphql.defaults({
     headers: {
@@ -150,20 +139,16 @@ if (!githubToken) {
     },
   });
 
-  const contributors = getDefaultContributors();
+  const newLastUpdated = Date.now();
   const owner = githubOwner;
   const repoName = githubRepository;
 
-  const cache = readCache();
   const lastUpdated =
-    Array.isArray(cache?.contributors) && cache.contributors.every(isContributor)
-      ? (cache.lastUpdated ?? null)
+    isContributorData(cache?.contributors) &&
+    Number.isFinite(cache.lastUpdated) &&
+    cache.lastUpdated > 0
+      ? cache.lastUpdated
       : null;
-  const cachedContributors = Array.isArray(cache?.contributors)
-    ? cache.contributors.filter(isContributor)
-    : [];
-  mergeContributorsFromCache(contributors, cachedContributors);
-  const newLastUpdated = Date.now();
 
   const getPullRequests = async (cursor) => {
     const { repository } = await graphqlGh(
@@ -217,12 +202,12 @@ if (!githubToken) {
       (!lastUpdated || lastUpdated <= new Date(lastResponse.nodes.at(-1)?.updatedAt))
     );
   } catch (error) {
-    // A GitHub API failure must not block dev or build: keep the previously
-    // fetched data (or bootstrap the defaults) and continue.
-    console.warn('Failed to fetch contributors from GitHub, using existing data:', error.message);
-    if (readContributors() === null) {
-      writeJsonFile(contributorsPath, toContributorData(getDefaultContributors()));
-    }
+    // The reconciled output is already written. Leave the cache checkpoint
+    // unchanged so the next successful refresh retries every unfinished page.
+    console.warn(
+      'Failed to fetch contributors from GitHub, using saved contributors:',
+      error.message
+    );
     process.exit(0);
   }
 
