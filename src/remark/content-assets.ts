@@ -26,7 +26,7 @@ export function remarkContentAssets() {
     const filePath = 'path' in file && typeof file.path === 'string' ? file.path : undefined;
     if (!filePath) return;
 
-    const relative = path.relative(contentRoot, filePath);
+    const relative = path.relative(contentRoot, filePath).split(path.sep).join('/');
     const directory = path.posix.dirname(relative);
 
     visit(tree, 'image', (node, index, parent) => {

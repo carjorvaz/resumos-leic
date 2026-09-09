@@ -256,25 +256,37 @@ export const remarkEmbedSnippet: Plugin<[options?: EmbedSnippetOptions], Root, R
         }
 
         if (snippetName.length) {
-          // Locate the markers positionally instead of with a dot-star regex:
-          // the legacy pattern backtracks quadratically on files without an end
-          // marker, stalling the build. Escape the snippet name (it is user
-          // content interpolated from the markdown).
-          const escapedName = snippetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const startMarker = `start-snippet{${escapedName}}`;
-          const startSnippetMatcher = new RegExp(`${startMarker}[^\r\n]*[\r\n]`, 'gs');
-          const startSnippetMatch = startSnippetMatcher.exec(sourceCode);
-          if (!startSnippetMatch) return '';
+          // Both markers are literal; scan positionally to avoid regex
+          // metacharacters and backtracking on an absent closing marker.
+          const startMarker = `start-snippet{${snippetName}}`;
+          const startIndex = sourceCode.indexOf(startMarker);
+          if (startIndex === -1) return '';
 
-          const snippetCode = sourceCode.slice(
-            startSnippetMatch.index + startSnippetMatch[0].length
-          );
-          const endMarker = `end-snippet{${escapedName}}`;
-          const endIndex = snippetCode.indexOf(endMarker);
-          if (endIndex === -1) return snippetCode;
+          let start = startIndex + startMarker.length;
+          while (
+            start < sourceCode.length &&
+            sourceCode[start] !== '\r' &&
+            sourceCode[start] !== '\n'
+          ) {
+            start++;
+          }
+          if (sourceCode[start] === '\r') start++;
+          if (sourceCode[start] === '\n') start++;
 
-          const lineStart = snippetCode.lastIndexOf('\n', endIndex) + 1;
-          return snippetCode.slice(0, lineStart);
+          const endIndex = sourceCode.indexOf(`end-snippet{${snippetName}}`, start);
+          if (endIndex === -1) return sourceCode.slice(start);
+
+          const lineStart =
+            Math.max(
+              sourceCode.lastIndexOf('\n', endIndex),
+              sourceCode.lastIndexOf('\r', endIndex)
+            ) + 1;
+          // Exclude just the separator before the closing marker, not authored
+          // blank lines inside the region. Treat CRLF as one line ending.
+          let end = lineStart;
+          if (end > start && sourceCode[end - 1] === '\n') end--;
+          if (end > start && sourceCode[end - 1] === '\r') end--;
+          return sourceCode.slice(start, Math.max(start, end));
         }
 
         return sourceCode;

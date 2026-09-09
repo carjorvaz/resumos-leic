@@ -1,6 +1,6 @@
-import { toString } from 'mdast-util-to-string';
 import { visit } from 'unist-util-visit';
-import GithubSlugger from 'github-slugger';
+import GithubSlugger, { slug } from 'github-slugger';
+import { toString } from 'mdast-util-to-string';
 import type { Code, List, ListItem, Node, PhrasingContent, Root } from 'mdast';
 import type { Plugin } from 'unified';
 
@@ -193,6 +193,23 @@ function one(node: Node): PhrasingContent[] {
   return [copy as PhrasingContent];
 }
 
+// Preserve Gatsby's value/alt/title precedence for public heading fragments.
+function legacyHeadingText(node: Node): string {
+  const textNode = node as Node & {
+    value?: string;
+    alt?: string;
+    title?: string;
+    children?: Node[];
+  };
+  const value = textNode.value || textNode.alt || textNode.title;
+  if (value) return value;
+  let result = '';
+  if (textNode.children) {
+    for (const child of textNode.children) result += legacyHeadingText(child);
+  }
+  return result;
+}
+
 /**
  * Port of `gatsby-remark-table-of-contents@2.0.0` (with `mdast-util-toc`'s
  * list building inlined): replaces a fenced code block with lang `toc` by a
@@ -202,9 +219,9 @@ function one(node: Node): PhrasingContent[] {
  * are listed), `toHeading: 6` (maxDepth), `className: 'toc'`, `ordered: false`.
  * `tight: true` produces `spread: false` lists (no blank lines between items).
  *
- * Heading ids are computed with `github-slugger` over *all* headings in
- * document order — mirroring Astro's `rehype-heading-ids` pass — so the TOC
- * anchors always match the ids rehype-autolink-headings links to, including
+ * Heading ids are computed once over all original Markdown headings, even
+ * without a TOC, and carried to HAST through data.hProperties.id. Both links
+ * and rendered headings therefore retain Gatsby's Markdown text slugs,
  * duplicate suffixes and custom ids (which do not consume a slug).
  */
 export const remarkToc: Plugin<[options?: TocOptions], Root, Root> = (options = {}) => {
@@ -213,18 +230,17 @@ export const remarkToc: Plugin<[options?: TocOptions], Root, Root> = (options = 
     // find position of TOC
     const index = tree.children.findIndex((node) => node.type === 'code' && node.lang === 'toc');
 
-    // we have no TOC
-    if (index === -1) return;
-
-    const tocNode = tree.children[index] as Code;
-    const prefs = {
-      ...defaultPrefs,
-      ...keysToCamel(pluginOptions),
-      ...keysToCamel(parsePrefs(tocNode.value)),
-    } as TocPrefs;
+    const tocNode = tree.children[index] as Code | undefined;
+    const prefs =
+      tocNode &&
+      ({
+        ...defaultPrefs,
+        ...keysToCamel(pluginOptions),
+        ...keysToCamel(parsePrefs(tocNode.value)),
+      } as TocPrefs);
 
     // For XSS safety, we only allow basic css names
-    if (!prefs.className.match(/^[ a-zA-Z0-9_-]*$/)) {
+    if (prefs && !prefs.className.match(/^[ a-zA-Z0-9_-]*$/)) {
       prefs.className = 'toc';
     }
 
@@ -232,13 +248,16 @@ export const remarkToc: Plugin<[options?: TocOptions], Root, Root> = (options = 
     const items: TocItem[] = [];
 
     visit(tree, 'heading', (heading, _index, parent) => {
-      const value = toString(heading);
-      const data = heading.data as Record<string, unknown> | undefined;
-      const hProperties = data?.hProperties as Record<string, unknown> | undefined;
-      const rawId = hProperties?.id;
-      const id = typeof rawId === 'string' ? rawId : slugger.slug(value);
+      const value = legacyHeadingText(heading);
+      const data = (heading.data ??= {}) as { hProperties?: Record<string, unknown> };
+      const hProperties = (data.hProperties ??= {});
+      const rawId = hProperties.id;
+      // Empty legacy titles must use Astro's visible-text fallback before deduplication.
+      const id =
+        typeof rawId === 'string' ? rawId : slugger.slug(slug(value) ? value : toString(heading));
+      hProperties.id = id;
 
-      if (parent !== tree) return;
+      if (!prefs || parent !== tree) return;
       if (!value) return;
       if (heading.depth < prefs.fromHeading) return;
       if (prefs.toHeading && heading.depth > prefs.toHeading) return;
@@ -248,6 +267,8 @@ export const remarkToc: Plugin<[options?: TocOptions], Root, Root> = (options = 
       }
       items.push({ depth: heading.depth, children: heading.children, id });
     });
+
+    if (!prefs) return;
 
     const map = items.length ? contents(items, prefs.tight, prefs.ordered) : null;
 
