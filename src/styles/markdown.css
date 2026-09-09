@@ -247,7 +247,9 @@ figcaption {
 table {
   border-collapse: collapse;
   margin: 1rem auto;
-  /* display: block; */
+  display: block;
+  width: max-content;
+  max-width: 100%;
   overflow-x: auto;
 }
 
